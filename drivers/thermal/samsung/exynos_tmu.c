@@ -1283,6 +1283,11 @@ static int exynos_cpufreq_cooling_register(struct exynos_tmu_data *data)
 }
 
 #ifdef CONFIG_GPU_THERMAL
+
+#ifdef CONFIG_MALI_DEBUG_KERNEL_SYSFS
+struct exynos_tmu_data *gpu_thermal_data = NULL;
+#endif
+
 static int exynos_gpufreq_cooling_register(struct exynos_tmu_data *data)
 {
 	struct device_node *np, *child = NULL, *gchild, *ggchild;
@@ -1338,6 +1343,10 @@ static int exynos_gpufreq_cooling_register(struct exynos_tmu_data *data)
 	        pr_err("gpu cooling device register fail \n");
 		return -ENODEV;
 	}
+
+#ifdef CONFIG_MALI_DEBUG_KERNEL_SYSFS
+	gpu_thermal_data = data;
+#endif
 
 	return ret;
 }
