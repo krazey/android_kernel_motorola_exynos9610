@@ -930,7 +930,9 @@ static int exynos_get_temp(void *p, int *temp)
 {
 	struct exynos_tmu_data *data = p;
 	int value, ret = 0;
-	struct thermal_cooling_device *cdev;
+	struct thermal_cooling_device *cdev = NULL;
+	struct thermal_zone_device *tz;
+	struct thermal_instance *instance;
 #ifdef CONFIG_EXYNOS_MCINFO
 	unsigned int mcinfo_count;
 	unsigned int mcinfo_result[4] = {0, 0, 0, 0};
@@ -951,7 +953,14 @@ static int exynos_get_temp(void *p, int *temp)
 
 	mutex_unlock(&data->lock);
 
-	cdev = data->cool_dev;
+	tz = data->tzd;
+
+	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
+		if (instance->cdev) {
+			cdev = instance->cdev;
+			break;
+		}
+	}
 
 	if (!cdev)
 		return 0;
@@ -1194,14 +1203,22 @@ static int exynos_pm_notifier(struct notifier_block *notifier,
 			unsigned long event, void *v)
 {
 	struct exynos_tmu_data *devnode;
-	struct thermal_cooling_device *cdev;
+	struct thermal_cooling_device *cdev = NULL;
+	struct thermal_zone_device *tz;
+	struct thermal_instance *instance;
 
 	switch (event) {
 	case PM_SUSPEND_PREPARE:
 		mutex_lock(&thermal_suspend_lock);
 		suspended = true;
 		list_for_each_entry(devnode, &dtm_dev_list, node) {
-			cdev = devnode->cool_dev;
+			tz = devnode->tzd;
+			list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
+				if (instance->cdev) {
+					cdev = instance->cdev;
+					break;
+				}
+			}
 
 			if (cdev && cdev->ops->set_cur_temp && devnode->id != 1)
 				cdev->ops->set_cur_temp(cdev, suspended, 0);
@@ -1213,6 +1230,13 @@ static int exynos_pm_notifier(struct notifier_block *notifier,
 		suspended = false;
 		list_for_each_entry(devnode, &dtm_dev_list, node) {
 			cdev = devnode->cool_dev;
+			tz = devnode->tzd;
+			list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
+				if (instance->cdev) {
+					cdev = instance->cdev;
+					break;
+				}
+			}
 
 			if (cdev && cdev->ops->set_cur_temp && devnode->id != 1)
 				cdev->ops->set_cur_temp(cdev, suspended, devnode->tzd->temperature / 1000);
