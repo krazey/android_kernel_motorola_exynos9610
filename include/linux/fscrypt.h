@@ -15,6 +15,12 @@
 #define _LINUX_FSCRYPT_H
 
 #include <linux/fs.h>
+#include <linux/mm.h>
+#include <linux/bio.h>
+#include <linux/dcache.h>
+#include <crypto/skcipher.h>
+#include <uapi/linux/fs.h>
+#include <crypto/diskcipher.h>
 
 #define FS_CRYPTO_BLOCK_SIZE		16
 
