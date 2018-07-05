@@ -1515,6 +1515,11 @@ int vb2_core_qbuf(struct vb2_queue *q, unsigned int index, void *pb,
 	unsigned long flags;
 	int ret;
 
+	if (q->error) {
+		dprintk(1, "fatal error occurred on queue\n");
+		return -EIO;
+	}
+
 	vb = q->bufs[index];
 
 	switch (vb->state) {
