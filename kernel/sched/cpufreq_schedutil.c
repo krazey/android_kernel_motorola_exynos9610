@@ -20,7 +20,7 @@
 #include "sched.h"
 #include "tune.h"
 
-unsigned long boosted_cpu_util(int cpu);
+unsigned long boosted_cpu_util(int cpu, unsigned long other_util);
 
 struct sugov_tunables {
 	struct gov_attr_set attr_set;
@@ -268,7 +268,7 @@ static void sugov_get_util(unsigned long *util, unsigned long *max, int cpu)
 
 	rt = sched_get_rt_rq_util(cpu);
 
-	*util = boosted_cpu_util(cpu) + rt;
+	*util = boosted_cpu_util(cpu, rt);
 	*util = min(*util, max_cap);
 	*max = max_cap;
 }
