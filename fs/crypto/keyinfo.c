@@ -294,19 +294,6 @@ static void put_master_key(struct fscrypt_master_key *mk)
 	hash_del(&mk->mk_node);
 	spin_unlock(&fscrypt_master_keys_lock);
 
-#if defined(CONFIG_CRYPTO_DISKCIPHER)
-	if ((ci->ci_dtfm && ci->ci_ctfm) || (ci->ci_dtfm && !virt_addr_valid(ci->ci_dtfm)) ||
-		(ci->ci_ctfm && !virt_addr_valid(ci->ci_ctfm)) ||
-		(ci->ci_essiv_tfm && !virt_addr_valid(ci->ci_essiv_tfm)))
-		pr_warn("fscrypto: mode:d:%d,f:%d, dt:%p(%d), ct:%p(%d), ess:%p(%d)\n",
-					ci->ci_data_mode, ci->ci_filename_mode,
-					ci->ci_dtfm, virt_addr_valid(ci->ci_dtfm),
-					ci->ci_ctfm, virt_addr_valid(ci->ci_ctfm),
-					ci->ci_essiv_tfm, virt_addr_valid(ci->ci_essiv_tfm));
-
-	if (ci->ci_dtfm && virt_addr_valid(ci->ci_dtfm))
-		crypto_free_req_diskcipher(ci->ci_dtfm);
-#endif
 	free_master_key(mk);
 }
 
@@ -561,9 +548,6 @@ int fscrypt_get_encryption_info(struct inode *inode)
 	crypt_info->ci_flags = ctx.flags;
 	crypt_info->ci_data_mode = ctx.contents_encryption_mode;
 	crypt_info->ci_filename_mode = ctx.filenames_encryption_mode;
-#if defined(CONFIG_CRYPTO_DISKCIPHER)
-	crypt_info->ci_dtfm = NULL;
-#endif
 	memcpy(crypt_info->ci_master_key_descriptor, ctx.master_key_descriptor,
 	       FS_KEY_DESCRIPTOR_SIZE);
 	memcpy(crypt_info->ci_nonce, ctx.nonce, FS_KEY_DERIVATION_NONCE_SIZE);
@@ -588,32 +572,6 @@ int fscrypt_get_encryption_info(struct inode *inode)
 	res = find_and_derive_key(inode, &ctx, raw_key, mode);
 	if (res)
 		goto out;
-
-#if defined(CONFIG_CRYPTO_DISKCIPHER)
-	if (S_ISREG(inode->i_mode)) {
-		/* try discipher first */
-		crypt_info->ci_dtfm = crypto_alloc_diskcipher(cipher_str, 0, 0, 1);
-		if (crypt_info->ci_dtfm && !IS_ERR(crypt_info->ci_dtfm)) {
-			res = crypto_diskcipher_setkey(crypt_info->ci_dtfm,
-				raw_key, keysize, 0);
-			if (!res) {
-				if (cmpxchg(&inode->i_crypt_info, NULL, crypt_info) == NULL)
-					crypt_info = NULL;
-				pr_debug("%s: (inode %p:%lu, fscrypt:%p) uses diskcipher tfm\n",
-					__func__, inode, inode->i_ino, inode->i_crypt_info);
-				goto out;
-			} else {
-				pr_warn("%s: error %d fails to set diskciher key\n",
-					__func__, res);
-				crypto_free_diskcipher(crypt_info->ci_dtfm);
-			}
-		}
-		/* clear diskcipher. use skcipher */
-		pr_debug("%s: (inode %lu) fails to get diskcipher (%s, %d)\n",
-			 __func__, inode->i_ino, cipher_str, res);
-		crypt_info->ci_dtfm = NULL;
-	}
-#endif
 
 	res = setup_crypto_transform(crypt_info, mode, raw_key, inode);
 	if (res)
