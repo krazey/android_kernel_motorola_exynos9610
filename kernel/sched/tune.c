@@ -46,6 +46,9 @@ struct schedtune {
 
 	/* Hint to group tasks by process */
 	int band;
+
+	/* SchedTune ontime migration */
+	int ontime_en;
 };
 
 static inline struct schedtune *css_st(struct cgroup_subsys_state *css)
@@ -464,6 +467,24 @@ int schedtune_util_est_en(struct task_struct *p)
 	return util_est_en;
 }
 
+int schedtune_ontime_en(struct task_struct *p)
+{
+	struct schedtune *st;
+	int ontime_en;
+
+	if (unlikely(!schedtune_initialized))
+		return 0;
+
+	/* Get ontime value */
+	rcu_read_lock();
+	st = task_schedtune(p);
+	ontime_en = st->ontime_en;
+	rcu_read_unlock();
+
+	return ontime_en;
+
+}
+
 int schedtune_prefer_idle(struct task_struct *p)
 {
 	struct schedtune *st;
@@ -536,6 +557,24 @@ util_est_en_write(struct cgroup_subsys_state *css, struct cftype *cft,
 {
 	struct schedtune *st = css_st(css);
 	st->util_est_en = util_est_en;
+
+	return 0;
+}
+
+static u64
+ontime_en_read(struct cgroup_subsys_state *css, struct cftype *cft)
+{
+	struct schedtune *st = css_st(css);
+
+	return st->ontime_en;
+}
+
+static int
+ontime_en_write(struct cgroup_subsys_state *css, struct cftype *cft,
+		u64 ontime_en)
+{
+	struct schedtune *st = css_st(css);
+	st->ontime_en = ontime_en;
 
 	return 0;
 }
@@ -644,6 +683,11 @@ static struct cftype files[] = {
 		.name = "util_est_en",
 		.read_u64 = util_est_en_read,
 		.write_u64 = util_est_en_write,
+	},
+	{
+		.name = "ontime_en",
+		.read_u64 = ontime_en_read,
+		.write_u64 = ontime_en_write,
 	},
 	{ }	/* terminate */
 };
