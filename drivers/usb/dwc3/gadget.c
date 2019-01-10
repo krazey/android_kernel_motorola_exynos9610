@@ -187,6 +187,8 @@ void dwc3_gadget_del_and_unmap_request(struct dwc3_ep *dep,
 	if (req->list.next != LIST_POISON1)
 		list_del(&req->list);
 	req->remaining = 0;
+	req->unaligned = false;
+	req->zero = false;
 
 	if (req->request.status == -EINPROGRESS)
 		req->request.status = status;
