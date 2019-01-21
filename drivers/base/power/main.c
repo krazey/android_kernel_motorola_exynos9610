@@ -820,7 +820,10 @@ static int device_resume(struct device *dev, pm_message_t state, bool async)
 
 	if (dev->power.direct_complete) {
 		/* Match the pm_runtime_disable() in __device_suspend(). */
-		pm_runtime_enable(dev);
+		if (!dev->power.is_suspend_aborted)
+			pm_runtime_enable(dev);
+		else
+			dev->power.is_suspend_aborted = false;
 		goto Complete;
 	}
 
@@ -1484,6 +1487,8 @@ static int __device_suspend(struct device *dev, pm_message_t state, bool async)
 		log_suspend_abort_reason(suspend_abort);
 		dev->power.direct_complete = false;
 		async_error = -EBUSY;
+		if (dev->power.direct_complete)
+			dev->power.is_suspend_aborted = true;
 		goto Complete;
 	}
 
