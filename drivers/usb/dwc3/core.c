@@ -985,8 +985,10 @@ int dwc3_core_init(struct dwc3 *dwc)
 	}
 
 	ret = dwc3_phy_setup(dwc);
-	if (ret)
+	if (ret) {
+		dev_err(dwc->dev, "Can't get PHY structure!!!\n");
 		goto err0;
+	}
 
 	/* Adjust SOF accuracy only for revisions >= 2.50a */
 	if (dwc->revision < DWC3_REVISION_250A)
@@ -994,8 +996,10 @@ int dwc3_core_init(struct dwc3 *dwc)
 
 	if (!dwc->ulpi_ready) {
 		ret = dwc3_core_ulpi_init(dwc);
-		if (ret)
+		if (ret) {
+			dev_err(dwc->dev, "Can't core_soft_reset!!!(%d)\n", ret);
 			goto err0;
+		}
 		dwc->ulpi_ready = true;
 	}
 
