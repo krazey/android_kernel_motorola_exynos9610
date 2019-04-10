@@ -5428,7 +5428,7 @@ out:
 static void ufshcd_err_handler(struct work_struct *work)
 {
 	struct ufs_hba *hba;
-	struct ufs_vreg_info *info = &hba->vreg_info;
+	struct ufs_vreg_info *info;
 	struct exynos_ufs *ufs;
 	unsigned long flags;
 	u32 err_xfer = 0;
@@ -5438,6 +5438,7 @@ static void ufshcd_err_handler(struct work_struct *work)
 	bool needs_reset = false;
 
 	hba = container_of(work, struct ufs_hba, eh_work);
+	info = &hba->vreg_info;
 
 	pm_runtime_get_sync(hba->dev);
 	ufshcd_hold(hba, false);
