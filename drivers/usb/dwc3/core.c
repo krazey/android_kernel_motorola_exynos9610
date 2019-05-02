@@ -984,12 +984,6 @@ int dwc3_core_init(struct dwc3 *dwc)
 			dwc->maximum_speed = USB_SPEED_HIGH;
 	}
 
-	ret = dwc3_phy_setup(dwc);
-	if (ret) {
-		dev_err(dwc->dev, "Can't get PHY structure!!!\n");
-		goto err0;
-	}
-
 	/* Adjust SOF accuracy only for revisions >= 2.50a */
 	if (dwc->revision < DWC3_REVISION_250A)
 		dwc->adj_sof_accuracy = 0;
@@ -1110,7 +1104,6 @@ err1:
 	phy_power_off(dwc->usb3_generic_phy);
 
 	dwc->link_state = DWC3_LINK_STATE_SS_DIS;
-
 err0a:
 	dwc3_ulpi_exit(dwc);
 

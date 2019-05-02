@@ -1516,10 +1516,9 @@ int xhci_bus_suspend(struct usb_hcd *hcd)
 	__le32 __iomem **port_array;
 	struct xhci_bus_state *bus_state;
 	unsigned long flags;
+	int is_port_connect = 0;
 	u32 portsc_buf[USB_MAXCHILDREN];
 	bool wake_enabled;
-	int is_port_connect = 0;
-	int ret;
 
 	max_ports = xhci_get_ports(hcd, &port_array);
 	bus_state = &xhci->bus_state[hcd_index(hcd)];
@@ -1616,16 +1615,6 @@ int xhci_bus_suspend(struct usb_hcd *hcd)
 			}
 		}
 		writel(portsc_buf[port_index], port_array[port_index]);
-	}
-
-	if (is_port_connect && usb_hcd_is_primary_hcd(hcd)) {
-		xhci_info(xhci, "port is connected, phy vendor set\n");
-		ret = phy_vendor_set(xhci->main_hcd->phy, 1, 0);
-		if (ret) {
-			xhci_info(xhci, "phy vendor set fail\n");
-			spin_unlock_irqrestore(&xhci->lock, flags);
-			return ret;
-		}
 	}
 
 	xhci_info(xhci, "%s 'HC_STATE_SUSPENDED' portcon: %d primary_hcd: %d\n",
