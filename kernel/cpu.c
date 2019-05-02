@@ -685,6 +685,9 @@ static void cpuhp_thread_fun(unsigned int cpu)
 	 */
 	smp_mb();
 
+	if (WARN_ON_ONCE(!st->should_run))
+		return;
+
 	lock_map_acquire(&cpuhp_state_lock_map);
 
 	if (st->single) {
