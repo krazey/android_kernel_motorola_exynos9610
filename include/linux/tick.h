@@ -122,7 +122,6 @@ extern void tick_nohz_idle_exit(void);
 extern void tick_nohz_irq_exit(void);
 extern bool tick_nohz_idle_got_tick(void);
 extern ktime_t tick_nohz_get_sleep_length(ktime_t *delta_next);
-extern ktime_t tick_nohz_get_sleep_length_cpu(int cpu);
 extern unsigned long tick_nohz_get_idle_calls(void);
 extern unsigned long tick_nohz_get_idle_calls_cpu(int cpu);
 extern u64 get_cpu_idle_time_us(int cpu, u64 *last_update_time);
@@ -149,10 +148,6 @@ static inline ktime_t tick_nohz_get_sleep_length(ktime_t *delta_next)
 {
 	*delta_next = TICK_NSEC;
 	return *delta_next;
-}
-static inline ktime_t tick_nohz_get_sleep_length_cpu(int cpu)
-{
-	return NSEC_PER_SEC / HZ;
 }
 static inline u64 get_cpu_idle_time_us(int cpu, u64 *unused) { return -1; }
 static inline u64 get_cpu_iowait_time_us(int cpu, u64 *unused) { return -1; }
@@ -318,5 +313,7 @@ static inline void tick_nohz_task_switch(void)
 	if (tick_nohz_full_enabled())
 		__tick_nohz_task_switch();
 }
+
+extern ktime_t *get_next_event_cpu(unsigned int cpu);
 
 #endif

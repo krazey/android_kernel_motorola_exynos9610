@@ -12,6 +12,7 @@
 #include "tune.h"
 
 #include "walt.h"
+#include "sched-pelt.h"
 #include <trace/events/sched.h>
 
 #ifdef CONFIG_SCHED_USE_FLUID_RT
