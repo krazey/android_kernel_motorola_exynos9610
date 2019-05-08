@@ -161,6 +161,13 @@ static struct fscrypt_mode available_modes[] = {
 		.keysize = 32,
 		.ivsize = 32,
 	},
+	[FS_ENCRYPTION_MODE_PRIVATE] = {
+		.friendly_name = "AES_256-XTS-diskcipher",
+		.cipher_str = "xts(aes)-disk",
+		.keysize = 64,
+		.ivsize = 16,
+		.flags = CRYPT_MODE_DISKCIPHER,
+	},
 };
 
 static struct fscrypt_mode *
