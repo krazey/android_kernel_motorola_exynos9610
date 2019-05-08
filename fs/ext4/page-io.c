@@ -66,7 +66,7 @@ static void ext4_finish_bio(struct bio *bio)
 
 	bio_for_each_segment_all(bvec, bio, i) {
 		struct page *page = bvec->bv_page;
-#ifdef CONFIG_EXT4_FS_ENCRYPTION
+#ifdef CONFIG_FS_ENCRYPTION
 		struct page *data_page = NULL;
 #endif
 		struct buffer_head *bh, *head;
@@ -78,7 +78,7 @@ static void ext4_finish_bio(struct bio *bio)
 		if (!page)
 			continue;
 
-#ifdef CONFIG_EXT4_FS_ENCRYPTION
+#ifdef CONFIG_FS_ENCRYPTION
 		if (!page->mapping) {
 			/* The bounce data pages are unmapped. */
 			data_page = page;
@@ -111,7 +111,7 @@ static void ext4_finish_bio(struct bio *bio)
 		bit_spin_unlock(BH_Uptodate_Lock, &head->b_state);
 		local_irq_restore(flags);
 		if (!under_io) {
-#ifdef CONFIG_EXT4_FS_ENCRYPTION
+#ifdef CONFIG_FS_ENCRYPTION
 			if (data_page)
 				fscrypt_restore_control_page(data_page);
 #endif
@@ -355,7 +355,7 @@ void ext4_io_submit(struct ext4_io_submit *io)
 		if (io->io_flags & EXT4_IO_ENCRYPTED)
 			io_op_flags |= REQ_NOENCRYPT;
 		bio_set_op_attrs(io->io_bio, REQ_OP_WRITE, io_op_flags);
-		if (ext4_encrypted_inode(io->io_end->inode) &&
+		if (IS_ENCRYPTED(io->io_end->inode) &&
 				S_ISREG(io->io_end->inode->i_mode)) {
 			fscrypt_set_bio(io->io_end->inode, io->io_bio, 0);
 			crypto_diskcipher_debug(FS_PAGEIO, io->io_bio->bi_opf);
@@ -485,8 +485,8 @@ int ext4_bio_write_page(struct ext4_io_submit *io,
 
 	bh = head = page_buffers(page);
 
-	if (ext4_encrypted_inode(inode) && S_ISREG(inode->i_mode) &&
-	    nr_to_submit && !fscrypt_disk_encrypted(inode)) {
+	if (IS_ENCRYPTED(inode) && S_ISREG(inode->i_mode) && nr_to_submit &&
+	    !fscrypt_disk_encrypted(inode)) {
 		gfp_t gfp_flags = GFP_NOFS;
 
 	retry_encrypt:
