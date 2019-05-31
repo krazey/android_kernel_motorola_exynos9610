@@ -738,7 +738,8 @@ int pstore_register(struct pstore_info *psi)
 	// Disable pstore compression/decompression for ramdom decompression fail
 	// will enable it when DDR is stable
 #if 0
-	allocate_buf_for_compression();
+	if (psi->flags & PSTORE_FLAGS_DMESG)
+		allocate_buf_for_compression();
 #endif
 
 	if (pstore_is_mounted())
