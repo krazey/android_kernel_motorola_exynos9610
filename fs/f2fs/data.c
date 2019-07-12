@@ -575,7 +575,10 @@ int f2fs_submit_page_bio(struct f2fs_io_info *fio)
 	if (f2fs_may_encrypt_bio(inode, fio))
 		fscrypt_set_bio(inode, bio, PG_DUN(inode, fio->page));
 
-	__f2fs_submit_read_bio(fio->sbi, bio, fio->type);
+	if (is_read_io(fio->op))
+		__f2fs_submit_read_bio(fio->sbi, bio, fio->type);
+	else
+		__submit_bio(fio->sbi, bio, fio->type);
 	return 0;
 }
 
