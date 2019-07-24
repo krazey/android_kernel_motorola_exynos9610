@@ -179,8 +179,6 @@ struct fscrypt_mode {
 	bool needs_essiv;
 };
 
-extern void __exit fscrypt_essiv_cleanup(void);
-
 static inline int __fscrypt_disk_encrypted(const struct inode *inode)
 {
 #if IS_ENABLED(CONFIG_FS_ENCRYPTION)
