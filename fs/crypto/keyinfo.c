@@ -174,10 +174,9 @@ static struct fscrypt_mode *
 select_encryption_mode(const struct fscrypt_info *ci, const struct inode *inode)
 {
 	if (!fscrypt_valid_enc_modes(ci->ci_data_mode, ci->ci_filename_mode)) {
-		fscrypt_warn(inode->i_sb,
-			     "inode %lu uses unsupported encryption modes (contents mode %d, filenames mode %d)",
-			     inode->i_ino, ci->ci_data_mode,
-			     ci->ci_filename_mode);
+		fscrypt_warn(inode,
+			     "Unsupported encryption modes (contents mode %d, filenames mode %d)",
+			     ci->ci_data_mode, ci->ci_filename_mode);
 		return ERR_PTR(-EINVAL);
 	}
 
@@ -214,14 +213,14 @@ static int find_and_derive_key(const struct inode *inode,
 
 	if (ctx->flags & FS_POLICY_FLAG_DIRECT_KEY) {
 		if (mode->ivsize < offsetofend(union fscrypt_iv, nonce)) {
-			fscrypt_warn(inode->i_sb,
-				     "direct key mode not allowed with %s",
+			fscrypt_warn(inode,
+				     "Direct key mode not allowed with %s",
 				     mode->friendly_name);
 			err = -EINVAL;
 		} else if (ctx->contents_encryption_mode !=
 			   ctx->filenames_encryption_mode) {
-			fscrypt_warn(inode->i_sb,
-				     "direct key mode not allowed with different contents and filenames modes");
+			fscrypt_warn(inode,
+				     "Direct key mode not allowed with different contents and filenames modes");
 			err = -EINVAL;
 		} else {
 			memcpy(derived_key, payload->raw, mode->keysize);
@@ -248,9 +247,8 @@ allocate_diskcipher_for_mode(struct fscrypt_mode *mode, const u8 *raw_key,
 
 	tfm = crypto_alloc_diskcipher(mode->cipher_str, 0, 0, force);
 	if (IS_ERR(tfm)) {
-		fscrypt_warn(inode->i_sb,
-				 "error allocating '%s' transform for inode %lu: %ld",
-				 mode->cipher_str, inode->i_ino, PTR_ERR(tfm));
+		fscrypt_warn(inode, "Error allocating '%s' transform: %ld",
+			     mode->cipher_str, PTR_ERR(tfm));
 		return tfm;
 	}
 	err = crypto_diskcipher_setkey(tfm, raw_key, mode->keysize, 0, inode);
@@ -275,9 +273,8 @@ allocate_skcipher_for_mode(struct fscrypt_mode *mode, const u8 *raw_key,
 
 	tfm = crypto_alloc_skcipher(mode->cipher_str, 0, 0);
 	if (IS_ERR(tfm)) {
-		fscrypt_warn(inode->i_sb,
-			     "error allocating '%s' transform for inode %lu: %ld",
-			     mode->cipher_str, inode->i_ino, PTR_ERR(tfm));
+		fscrypt_warn(inode, "Error allocating '%s' transform: %ld",
+			     mode->cipher_str, PTR_ERR(tfm));
 		return tfm;
 	}
 	if (unlikely(!mode->logged_impl_name)) {
@@ -408,7 +405,7 @@ fscrypt_get_master_key(const struct fscrypt_info *ci, struct fscrypt_mode *mode,
 	if (S_ISREG(inode->i_mode)) {
 		mk->mk_dtfm = allocate_diskcipher_for_mode(mode, raw_key, inode);
 		if (IS_ERR(mk->mk_dtfm)) {
-			fscrypt_warn(inode->i_sb, "fails to get diskipher: %p", mk->mk_dtfm);
+			fscrypt_warn(inode, "fails to get diskipher: %p", mk->mk_dtfm);
 			mk->mk_dtfm = NULL;
 		} else
 			goto end_get_tfm;
@@ -521,7 +518,7 @@ static int setup_crypto_transform(struct fscrypt_info *ci,
 		if (S_ISREG(inode->i_mode)) {
 			ci->ci_dtfm = allocate_diskcipher_for_mode(mode, raw_key, inode);
 			if (IS_ERR(ci->ci_dtfm)) {
-				fscrypt_warn(inode->i_sb, "fails to get diskipher: %p", ci->ci_dtfm);
+				fscrypt_warn(inode, "fails to get diskipher: %p", ci->ci_dtfm);
 				ci->ci_dtfm = NULL;
 			} else
 				goto end_get_tfm;
@@ -547,9 +544,9 @@ end_get_tfm:
 
 		err = init_essiv_generator(ci, raw_key, mode->keysize);
 		if (err) {
-			fscrypt_warn(inode->i_sb,
-				     "error initializing ESSIV generator for inode %lu: %d",
-				     inode->i_ino, err);
+			fscrypt_warn(inode,
+				     "Error initializing ESSIV generator: %d",
+				     err);
 			return err;
 		}
 	}
