@@ -186,6 +186,27 @@ fscrypt_mode_supports_direct_key(const struct fscrypt_mode *mode)
 	return mode->ivsize >= offsetofend(union fscrypt_iv, nonce);
 }
 
+extern struct crypto_skcipher *
+fscrypt_allocate_skcipher(struct fscrypt_mode *mode, const u8 *raw_key,
+			  const struct inode *inode);
+#if defined(CONFIG_CRYPTO_DISKCIPHER)
+extern struct crypto_diskcipher *
+fscrypt_allocate_diskcipher(struct fscrypt_mode *mode, const u8 *raw_key,
+			  const struct inode *inode);
+#endif
+extern int fscrypt_set_derived_key(struct fscrypt_info *ci,
+				   const u8 *derived_key);
+
+/* keysetup_v1.c */
+
+extern void fscrypt_put_direct_key(struct fscrypt_direct_key *dk);
+
+extern int fscrypt_setup_v1_file_key(struct fscrypt_info *ci,
+				     const u8 *raw_master_key);
+
+extern int fscrypt_setup_v1_file_key_via_subscribed_keyrings(
+					struct fscrypt_info *ci);
+
 static inline int __fscrypt_disk_encrypted(const struct inode *inode)
 {
 #if IS_ENABLED(CONFIG_FS_ENCRYPTION)
