@@ -1408,6 +1408,9 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 	device_property_read_u32(dev, "snps,quirk-frame-length-adjustment",
 				 &dwc->fladj);
 
+	dwc->dis_metastability_quirk = device_property_read_bool(dev,
+				"snps,dis_metastability_quirk");
+
 	dev_info(dwc->dev, "%s: dr_mode:%d, suspend clock:%dMHz\n", __func__,
 			dwc->dr_mode , dwc->suspend_clk_freq/1000000);
 
