@@ -447,7 +447,7 @@ struct fscrypt_mode {
 	const char *cipher_str;
 	int keysize;
 	int ivsize;
-	bool logged_impl_name;
+	int logged_impl_name;
 	enum cipher_flags flags;
 };
 
