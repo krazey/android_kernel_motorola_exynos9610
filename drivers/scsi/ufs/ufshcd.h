@@ -665,11 +665,17 @@ struct ufs_hba {
 	 */
 	#define UFSHCD_QUIRK_PRDT_BYTE_GRAN			UFS_BIT(7)
 
-	#define UFSHCD_QUIRK_USE_OF_HCE				UFS_BIT(8)
-	#define UFSHCD_QUIRK_GET_UPMCRS_DIRECT			UFS_BIT(9)
-	#define UFSHCI_QUIRK_SKIP_INTR_AGGR			UFS_BIT(10)
-	#define UFSHCD_QUIRK_GET_GENERRCODE_DIRECT		UFS_BIT(11)
-	#define UFSHCD_QUIRK_UNRESET_INTR_AGGR			UFS_BIT(12)
+	/*
+	 * This quirk needs to be enabled if the host controller advertises
+	 * inline encryption support but it doesn't work correctly.
+	 */
+	#define UFSHCD_QUIRK_BROKEN_CRYPTO			UFS_BIT(11)
+
+	#define UFSHCD_QUIRK_USE_OF_HCE				UFS_BIT(12)
+	#define UFSHCD_QUIRK_GET_UPMCRS_DIRECT			UFS_BIT(13)
+	#define UFSHCI_QUIRK_SKIP_INTR_AGGR			UFS_BIT(14)
+	#define UFSHCD_QUIRK_GET_GENERRCODE_DIRECT		UFS_BIT(15)
+	#define UFSHCD_QUIRK_UNRESET_INTR_AGGR			UFS_BIT(16)
 
 	unsigned int quirks;	/* Deviations from standard UFSHCI spec. */
 
