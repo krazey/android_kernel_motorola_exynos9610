@@ -350,6 +350,7 @@ void ion_page_pool_destroy(struct ion_page_pool *pool);
 struct page *ion_page_pool_alloc(struct ion_page_pool *pool, bool nozero);
 void ion_page_pool_free(struct ion_page_pool *pool, struct page *page);
 int ion_page_pool_total(struct ion_page_pool *pool, bool high);
+long ion_page_pool_nr_pages(void);
 
 /** ion_page_pool_shrink - shrinks the size of the memory cached in the pool
  * @pool:		the pool
