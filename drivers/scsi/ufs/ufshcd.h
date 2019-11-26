@@ -557,6 +557,7 @@ struct ufs_stats {
  * @uic_error: UFS interconnect layer error status
  * @saved_err: sticky error mask
  * @saved_uic_err: sticky UIC error mask
+ * @silence_err_logs: flag to silence error logs
  * @dev_cmd: ufs device management command information
  * @last_dme_cmd_tstamp: time stamp of the last completed DME command
  * @auto_bkops_enabled: to track whether bkops is enabled in device
@@ -716,6 +717,7 @@ struct ufs_hba {
 	u32 saved_uic_err;
 	u32 saved_uic_phy_err_cnt;
 	struct ufs_stats ufs_stats;
+	bool silence_err_logs;
 
 	u32 tcx_replay_timer_expired_cnt;
 	u32 fcx_protection_timer_expired_cnt;
