@@ -120,6 +120,7 @@ static int dma_buf_release(struct inode *inode, struct file *file)
 
 	module_put(dmabuf->owner);
 	kfree(dmabuf->exp_name);
+	kfree(dmabuf->name);
 	kfree(dmabuf);
 	return 0;
 }
