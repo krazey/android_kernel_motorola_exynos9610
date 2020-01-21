@@ -3980,7 +3980,14 @@ static inline bool f2fs_force_buffered_io(struct inode *inode,
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
 	int rw = iov_iter_rw(iter);
 
-	if (f2fs_post_read_required(inode) && !fscrypt_disk_encrypted(inode))
+	if (IS_ENABLED(CONFIG_FS_ENCRYPTION) && f2fs_encrypted_file(inode) &&
+	    !fscrypt_disk_encrypted(inode)) {
+		if (!fscrypt_inode_uses_inline_crypto(inode) ||
+		    !IS_ALIGNED(iocb->ki_pos | iov_iter_alignment(iter),
+				F2FS_BLKSIZE))
+			return true;
+	}
+	if (fsverity_active(inode))
 		return true;
 	if (f2fs_is_multi_device(sbi))
 		return true;
