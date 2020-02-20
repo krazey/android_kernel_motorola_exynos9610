@@ -126,7 +126,11 @@ struct fscrypt_add_key_arg {
 	struct fscrypt_key_specifier key_spec;
 	__u32 raw_size;
 	__u32 key_id;
+<<<<<<< HEAD
 	__u32 __reserved[8];
+=======
+	__u32 __reserved[7];
+>>>>>>> 7c8064124209... Merge remote-tracking branch 'aosp/upstream-f2fs-stable-linux-4.14.y' into android-4.14
 	/* N.B.: "temporary" flag, not reserved upstream */
 #define __FSCRYPT_ADD_KEY_FLAG_HW_WRAPPED		0x00000001
 	__u32 __flags;

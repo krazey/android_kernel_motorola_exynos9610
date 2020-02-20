@@ -486,21 +486,6 @@ static inline int fscrypt_prepare_setflags(struct inode *inode,
 	return 0;
 }
 
-static inline int fscrypt_disk_encrypted(const struct inode *inode)
-{
-	return 0;
-}
-
-static inline void fscrypt_set_bio(const struct inode *inode, struct bio *bio, u64 dun)
-{
-	return;
-}
-
-static inline void *fscrypt_get_diskcipher(const struct inode *inode)
-{
-	return NULL;
-}
-
 static inline int __fscrypt_prepare_symlink(struct inode *dir,
 					    unsigned int len,
 					    unsigned int max_len,
