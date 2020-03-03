@@ -6316,17 +6316,10 @@ static int ufshcd_reset_and_restore(struct ufs_hba *hba)
 {
 	int err = 0;
 	int retries = MAX_HOST_RESET_RETRIES;
-
 	int tag;
 
 	for_each_set_bit(tag, &hba->outstanding_reqs, hba->nutrs)
 		ufshcd_clear_cmd(hba, tag);
-
-	spin_lock_irqsave(hba->host->host_lock, flags);
-	ufshcd_transfer_req_compl(hba, DID_RESET);
-	spin_unlock_irqrestore(hba->host->host_lock, flags);
-
-	ssleep(1);
 
 	do {
 		err = ufshcd_host_reset_and_restore(hba);
