@@ -1544,14 +1544,14 @@ struct ext4_sb_info {
 	struct ratelimit_state s_warning_ratelimit_state;
 	struct ratelimit_state s_msg_ratelimit_state;
 
+	/* Encryption context for '-o test_dummy_encryption' */
+	struct fscrypt_dummy_context s_dummy_enc_ctx;
+
 	/*
 	 * Barrier between writepages ops and changing any inode's JOURNAL_DATA
 	 * or EXTENTS flag.
 	 */
 	struct percpu_rw_semaphore s_writepages_rwsem;
-
-	/* Encryption context for '-o test_dummy_encryption' */
-	struct fscrypt_dummy_context s_dummy_enc_ctx;
 
 	struct dax_device *s_daxdev;
 };

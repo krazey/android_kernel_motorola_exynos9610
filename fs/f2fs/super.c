@@ -1597,6 +1597,9 @@ static int f2fs_show_options(struct seq_file *seq, struct dentry *root)
 		seq_printf(seq, ",whint_mode=%s", "user-based");
 	else if (F2FS_OPTION(sbi).whint_mode == WHINT_MODE_FS)
 		seq_printf(seq, ",whint_mode=%s", "fs-based");
+
+	fscrypt_show_test_dummy_encryption(seq, ',', sbi->sb);
+
 #ifdef CONFIG_FS_ENCRYPTION
 	if (F2FS_OPTION(sbi).inlinecrypt)
 		seq_puts(seq, ",inlinecrypt");

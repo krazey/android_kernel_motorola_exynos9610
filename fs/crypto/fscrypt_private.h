@@ -590,12 +590,11 @@ struct fscrypt_mode {
 
 extern struct fscrypt_mode fscrypt_modes[];
 
-extern int fscrypt_prepare_key(struct fscrypt_prepared_key *prep_key,
-			       const u8 *raw_key, unsigned int raw_key_size,
-			       bool is_hw_wrapped,
-			       const struct fscrypt_info *ci);
+int fscrypt_prepare_key(struct fscrypt_prepared_key *prep_key,
+			const u8 *raw_key, unsigned int raw_key_size,
+			bool is_hw_wrapped, const struct fscrypt_info *ci);
 
-extern void fscrypt_destroy_prepared_key(struct fscrypt_prepared_key *prep_key);
+void fscrypt_destroy_prepared_key(struct fscrypt_prepared_key *prep_key);
 
 int fscrypt_set_per_file_enc_key(struct fscrypt_info *ci, const u8 *raw_key);
 
