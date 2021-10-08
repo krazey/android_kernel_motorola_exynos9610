@@ -87,10 +87,6 @@ static void dma_buf_release(struct dentry *dentry)
 
 	dmabuf->ops->release(dmabuf);
 
-	mutex_lock(&db_list.lock);
-	list_del(&dmabuf->list_node);
-	mutex_unlock(&db_list.lock);
-
 	dmabuf_trace_free(dmabuf);
 
 	if (dmabuf->resv == (struct reservation_object *)&dmabuf[1])
@@ -100,6 +96,22 @@ static void dma_buf_release(struct dentry *dentry)
 	kfree(dmabuf->exp_name);
 	kfree(dmabuf->name);
 	kfree(dmabuf);
+}
+
+static int dma_buf_file_release(struct inode *inode, struct file *file)
+{
+	struct dma_buf *dmabuf;
+
+	if (!is_dma_buf_file(file))
+		return -EINVAL;
+
+	dmabuf = file->private_data;
+
+	mutex_lock(&db_list.lock);
+	list_del(&dmabuf->list_node);
+	mutex_unlock(&db_list.lock);
+
+	return 0;
 }
 
 static const struct dentry_operations dma_buf_dentry_ops = {
@@ -429,6 +441,7 @@ static void dma_buf_show_fdinfo(struct seq_file *m, struct file *file)
 }
 
 static const struct file_operations dma_buf_fops = {
+	.release	= dma_buf_file_release,
 	.mmap		= dma_buf_mmap_internal,
 	.llseek		= dma_buf_llseek,
 	.poll		= dma_buf_poll,
