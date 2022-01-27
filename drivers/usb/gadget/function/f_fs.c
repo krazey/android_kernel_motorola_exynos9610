@@ -1101,6 +1101,7 @@ ffs_epfile_open(struct inode *inode, struct file *file)
 	/* to get updated opened atomic variable value */
 	smp_mb__before_atomic();
 	atomic_set(&epfile->error, 0);
+
 	return stream_open(inode, file);
 }
 
