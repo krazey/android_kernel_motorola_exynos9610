@@ -79,11 +79,7 @@ unsigned long random_get_entropy_fallback(void);
  * If a given arch does not have get_cycles(), then we fallback to
  * using random_get_entropy_fallback().
  */
-#ifdef get_cycles
 #define random_get_entropy()	((unsigned long)get_cycles())
-#else
-#define random_get_entropy()	random_get_entropy_fallback()
-#endif
 #endif
 
 /*
