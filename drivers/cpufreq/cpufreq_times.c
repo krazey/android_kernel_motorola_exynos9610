@@ -185,6 +185,22 @@ static void *uid_seq_next(struct seq_file *seq, void *v, loff_t *pos)
 
 static void uid_seq_stop(struct seq_file *seq, void *v) { }
 
+static bool freq_index_invalid(unsigned int index)
+{
+	unsigned int cpu;
+	struct cpu_freqs *freqs;
+
+	for_each_possible_cpu(cpu) {
+		freqs = all_freqs[cpu];
+		if (!freqs || index < freqs->offset ||
+		    freqs->offset + freqs->max_state <= index)
+			continue;
+		return freqs->freq_table[index - freqs->offset] ==
+			CPUFREQ_ENTRY_INVALID;
+	}
+	return true;
+}
+
 static int uid_time_in_state_seq_show(struct seq_file *m, void *v)
 {
 	struct uid_entry *uid_entry;
@@ -495,10 +511,6 @@ void cpufreq_times_create_policy(struct cpufreq_policy *policy)
 	cpufreq_for_each_valid_entry(pos, table)
 		freqs->freq_table[index++] = pos->frequency;
 
-	index = cpufreq_times_get_index(freqs, policy->cur);
-	if (index >= 0)
-		WRITE_ONCE(freqs->last_index, index);
-
 	freqs->offset = next_offset;
 	WRITE_ONCE(next_offset, freqs->offset + count);
 	for_each_cpu(cpu, policy->related_cpus)
@@ -537,13 +549,21 @@ void cpufreq_task_times_remove_uids(uid_t uid_start, uid_t uid_end)
 void cpufreq_times_record_transition(struct cpufreq_freqs *freq)
 {
 	int index;
-	struct cpu_freqs *freqs = all_freqs[policy->cpu];
+	struct cpu_freqs *freqs = all_freqs[freq->cpu];
+	struct cpufreq_policy *policy;
+
 	if (!freqs)
 		return;
 
-	index = cpufreq_times_get_index(freqs, new_freq);
+	policy = cpufreq_cpu_get(freq->cpu);
+	if (!policy)
+		return;
+
+	index = cpufreq_frequency_table_get_index(policy, freq->new);
 	if (index >= 0)
 		WRITE_ONCE(freqs->last_index, index);
+
+	cpufreq_cpu_put(policy);
 }
 
 static const struct seq_operations uid_time_in_state_seq_ops = {

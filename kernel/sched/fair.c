@@ -2835,9 +2835,6 @@ static inline void cfs_rq_util_change(struct cfs_rq *cfs_rq)
 		 * See cpu_util().
 		 */
 		cpufreq_update_util(rq, 0);
-#ifdef CONFIG_SMP
-		trace_sched_load_avg_cpu(cpu_of(rq), cfs_rq);
-#endif
 	}
 }
 
@@ -5181,8 +5178,6 @@ static inline void hrtick_update(struct rq *rq)
 #ifdef CONFIG_SMP
 static bool cpu_overutilized(int cpu);
 
-static unsigned long cpu_util(int cpu);
-
 static bool sd_overutilized(struct sched_domain *sd)
 {
 	return sd->shared->overutilized;
@@ -5732,8 +5727,6 @@ inline bool energy_aware(void)
 {
 	return sched_feat(ENERGY_AWARE);
 }
-
-static int cpu_util_wake(int cpu, struct task_struct *p);
 
 /*
  * __cpu_norm_util() returns the cpu util relative to a specific capacity,
@@ -7430,7 +7423,7 @@ static int wake_cap(struct task_struct *p, int cpu, int prev_cpu)
 	long min_cap, max_cap;
 
 	min_cap = min(capacity_orig_of(prev_cpu), capacity_orig_of(cpu));
-	max_cap = cpu_rq(cpu)->rd->max_cpu_capacity;
+	max_cap = cpu_rq(cpu)->rd->max_cpu_capacity.val;
 
 	/* Minimum capacity is close to max, no need to abort wake_affine */
 	if (max_cap - min_cap < max_cap >> 3)
@@ -8063,29 +8056,6 @@ preempt:
 		set_last_buddy(se);
 }
 
-static inline void update_misfit_task(struct rq *rq, struct task_struct *p)
-{
-#ifdef CONFIG_SMP
-	rq->misfit_task = !task_fits_capacity(p, capacity_of(rq->cpu));
-#endif
-}
-
-static inline void clear_rq_misfit(struct rq *rq)
-{
-#ifdef CONFIG_SMP
-	rq->misfit_task = 0;
-#endif
-}
-
-static inline unsigned int rq_has_misfit(struct rq *rq)
-{
-#ifdef CONFIG_SMP
-	return rq->misfit_task;
-#else
-	return 0;
-#endif
-}
-
 static struct task_struct *
 pick_next_task_fair(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 {
@@ -8176,7 +8146,7 @@ again:
 	if (hrtick_enabled(rq))
 		hrtick_start_fair(rq, p);
 
-	update_misfit_task(rq, p);
+	update_misfit_status(p, rq);
 
 	return p;
 simple:
@@ -8195,12 +8165,12 @@ simple:
 	if (hrtick_enabled(rq))
 		hrtick_start_fair(rq, p);
 
-	update_misfit_task(rq, p);
+	update_misfit_status(p, rq);
 
 	return p;
 
 idle:
-	clear_rq_misfit(rq);
+	update_misfit_status(NULL, rq);
 	new_tasks = idle_balance(rq, rf);
 
 	/*
@@ -8946,7 +8916,8 @@ struct sg_lb_stats {
 	unsigned int group_weight;
 	enum group_type group_type;
 	int group_no_capacity;
-	int group_misfit_task; /* A cpu has a task too big for its capacity */
+	/* A cpu has a task too big for its capacity */
+	unsigned long group_misfit_task_load;
 #ifdef CONFIG_NUMA_BALANCING
 	unsigned int nr_numa_running;
 	unsigned int nr_preferred_running;
@@ -9297,7 +9268,7 @@ group_type group_classify(struct sched_group *group,
 	if (sg_imbalanced(group))
 		return group_imbalanced;
 
-	if (sgs->group_misfit_task)
+	if (sgs->group_misfit_task_load)
 		return group_misfit_task;
 
 	return group_other;
@@ -9353,8 +9324,10 @@ static inline void update_sg_lb_stats(struct lb_env *env,
 			sgs->idle_cpus++;
 
 		if (env->sd->flags & SD_ASYM_CPUCAPACITY &&
-		    !sgs->group_misfit_task && rq_has_misfit(rq))
-			sgs->group_misfit_task = capacity_of(i);
+		    sgs->group_misfit_task_load < rq->misfit_task_load) {
+			sgs->group_misfit_task_load = rq->misfit_task_load;
+			*overload = 1;
+		}
 
 		if (sched_feat(EXYNOS_MS)) {
 			if (lbt_overutilized(i, env->sd->level)) {
@@ -9848,7 +9821,7 @@ static inline void calculate_imbalance(struct lb_env *env, struct sd_lb_stats *s
 	/* Boost imbalance to allow misfit task to be balanced. */
 	if (busiest->group_type == group_misfit_task) {
 		env->imbalance = max_t(long, env->imbalance,
-				       busiest->group_misfit_task);
+				       busiest->group_misfit_task_load);
 	}
 
 	/*
@@ -10011,13 +9984,29 @@ static struct rq *find_busiest_queue(struct lb_env *env,
 			continue;
 
 		/*
-		 * For ASYM_CPUCAPACITY domains with misfit tasks we ignore
-		 * load.
+		 * For ASYM_CPUCAPACITY domains with misfit tasks we simply
+		 * seek the "biggest" misfit task.
 		 */
-		if (env->src_grp_type == group_misfit_task && rq_has_misfit(rq))
-			return rq;
+		if (env->src_grp_type == group_misfit_task) {
+			if (rq->misfit_task_load > busiest_load) {
+				busiest_load = rq->misfit_task_load;
+				busiest = rq;
+			}
+			continue;
+		}
 
 		capacity = capacity_of(i);
+
+		/*
+		 * For ASYM_CPUCAPACITY domains, don't pick a cpu that could
+		 * eventually lead to active_balancing high->low capacity.
+		 * Higher per-cpu capacity is considered better than balancing
+		 * average load.
+		 */
+		if (env->sd->flags & SD_ASYM_CPUCAPACITY &&
+		    capacity_of(env->dst_cpu) < capacity &&
+		    rq->nr_running == 1)
+			continue;
 
 		wl = weighted_cpuload(rq);
 
@@ -10096,6 +10085,13 @@ static int need_active_balance(struct lb_env *env)
 				!cpu_overutilized(env->dst_cpu)) {
 			return 1;
 	}
+
+	if (env->src_grp_type == group_misfit_task)
+		return 1;
+
+	if (env->src_grp_type == group_overloaded &&
+	    env->src_rq->misfit_task_load)
+		return 1;
 
 	return unlikely(sd->nr_balance_failed > sd->cache_nice_tries+2);
 }
@@ -10435,7 +10431,7 @@ get_sd_balance_interval(struct sched_domain *sd, int cpu_busy)
 	if (energy_aware() && sd_overutilized(sd)) {
 		/* we know the root is overutilized, let's check for a misfit task */
 		for_each_cpu(cpu, sched_domain_span(sd)) {
-			if (rq_has_misfit(cpu_rq(cpu)))
+			if (cpu_rq(cpu)->misfit_task_load)
 				return 1;
 		}
 	}
@@ -11062,7 +11058,7 @@ static inline bool nohz_kick_needed(struct rq *rq, bool only_update)
 
 	/* Do idle load balance if there have misfit task */
 	if (energy_aware())
-		return rq_has_misfit(rq);
+		return rq->misfit_task_load;
 
 	rcu_read_lock();
 	sds = rcu_dereference(per_cpu(sd_llc_shared, cpu));
@@ -11191,7 +11187,7 @@ static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
 	if (static_branch_unlikely(&sched_numa_balancing))
 		task_tick_numa(rq, curr);
 
-	update_misfit_task(rq, curr);
+	update_misfit_status(curr, rq);
 
 	update_overutilized_status(rq);
 
