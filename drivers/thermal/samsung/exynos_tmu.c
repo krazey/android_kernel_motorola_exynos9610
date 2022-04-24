@@ -783,7 +783,7 @@ static void exynos9610_tmu_control(struct platform_device *pdev, bool on)
 static int exynos_get_temp(void *p, int *temp)
 {
 	struct exynos_tmu_data *data = p;
-	int value, ret = 0;
+	int ret = 0;
 #ifndef CONFIG_EXYNOS_ACPM_THERMAL
 	struct thermal_cooling_device *cdev = NULL;
 	struct thermal_zone_device *tz;
