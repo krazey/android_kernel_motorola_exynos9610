@@ -690,12 +690,12 @@ static struct bio *f2fs_grab_read_bio(struct inode *inode, block_t blkaddr,
 		ctx->enabled_steps = post_read_steps;
 		bio->bi_private = ctx;
 		bio_set_op_attrs(bio, REQ_OP_READ,
-			(f2fs_encrypted_inode(inode) ?
+			(f2fs_encrypted_file(inode) ?
 			 REQ_NOENCRYPT :
 			 0));
 
 		/* wait the page to be moved by cleaning */
-		f2fs_wait_on_block_writeback(sbi, blkaddr);
+		f2fs_wait_on_block_writeback(inode, blkaddr);
 	}
 
 	return bio;

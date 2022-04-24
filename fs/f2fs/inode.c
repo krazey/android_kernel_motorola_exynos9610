@@ -299,15 +299,6 @@ static bool sanity_check_inode(struct inode *inode, struct page *node_page)
 		return false;
 	}
 
-	if (f2fs_has_extra_attr(inode) &&
-			!f2fs_sb_has_extra_attr(sbi->sb)) {
-		set_sbi_flag(sbi, SBI_NEED_FSCK);
-		f2fs_msg(sbi->sb, KERN_WARNING,
-			"%s: inode (ino=%lx) is with extra_attr, "
-			"but extra_attr feature is off",
-			__func__, inode->i_ino);
-		return false;
-	}
 	return true;
 }
 
@@ -361,7 +352,7 @@ static int do_read_inode(struct inode *inode)
 
 	get_inline_info(inode, ri);
 
-	if (!sanity_check_inode(inode)) {
+	if (!sanity_check_inode(inode, node_page)) {
 		f2fs_put_page(node_page, 1);
 		return -EINVAL;
 	}
