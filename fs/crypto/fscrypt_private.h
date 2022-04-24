@@ -168,12 +168,19 @@ extern bool fscrypt_fname_encrypted_size(const struct inode *inode,
 
 /* keyinfo.c */
 
+enum cipher_flags {
+	CRYPT_MODE_SKCIPHER,
+	CRYPT_MODE_ESSIV,
+	CRYPT_MODE_DISKCIPHER,
+};
+
 struct fscrypt_mode {
 	const char *friendly_name;
 	const char *cipher_str;
 	int keysize;
 	int ivsize;
 	bool logged_impl_name;
+	enum cipher_flags flags;
 	bool needs_essiv;
 };
 
