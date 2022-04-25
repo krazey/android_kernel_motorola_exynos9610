@@ -2052,7 +2052,7 @@ static int crypt_setkey(struct crypt_config *cc)
 		else if (crypt_mode_diskcipher(cc))
 			r = crypto_diskcipher_setkey(cc->cipher_tfm.tfms_diskc[i],
 						   cc->key + (i * subkey_size),
-						   subkey_size, 1);
+						   subkey_size, 1, NULL);
 		else
 			r = crypto_skcipher_setkey(cc->cipher_tfm.tfms[i],
 						   cc->key + (i * subkey_size),

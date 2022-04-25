@@ -161,7 +161,8 @@ void crypto_diskcipher_set(struct bio *bio, struct crypto_diskcipher *tfm, const
  * Return: 0 if the setting of the key was successful; < 0 if an error occurred
  */
 int crypto_diskcipher_setkey(struct crypto_diskcipher *tfm, const char *key,
-			     u32 keylen, bool persistent);
+				u32 keylen, bool persistent,
+				const struct inode *inode);
 
 /**
  * crypto_diskcipher_clearkey() - clear key

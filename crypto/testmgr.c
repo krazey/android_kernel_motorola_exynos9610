@@ -1731,7 +1731,7 @@ static int __test_diskcipher(struct crypto_diskcipher *tfm, int enc,
 			goto out;
 
 		ret = crypto_diskcipher_setkey(tfm, template[i].key,
-					     template[i].klen, 0);
+					     template[i].klen, 0, NULL);
 		if (ret == -ENOKEY) {
 			pr_err("alg: diskcipher: no support %d keylen for %s. skip it\n",
 			       template[i].klen, algo);

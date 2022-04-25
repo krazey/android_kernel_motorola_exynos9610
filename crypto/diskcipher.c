@@ -246,18 +246,20 @@ enum diskc_status {
 };
 
 int crypto_diskcipher_setkey(struct crypto_diskcipher *tfm, const char *in_key,
-			     unsigned int key_len, bool persistent)
+				unsigned int key_len, bool persistent,
+				const struct inode *inode)
 {
 	struct crypto_tfm *base = crypto_diskcipher_tfm(tfm);
 	struct diskcipher_alg *cra = crypto_diskcipher_alg(base->__crt_alg);
+	int ret = -EINVAL;
 
-	if (!cra) {
-		pr_err("%s: doesn't exist cra. base:%p", __func__, base);
-		return -EINVAL;
-	}
+	if (cra)
+		ret = cra->setkey(base, in_key, key_len, persistent);
+	else
+		pr_err("%s: doesn't exist cra. base:%pK", __func__, base);
 
-	crypto_diskcipher_debug(DISKC_API_SETKEY, 0);
-	return cra->setkey(base, in_key, key_len, persistent);
+	crypto_diskcipher_debug(DISKC_API_SETKEY, ret ? true : false);
+	return ret;
 }
 
 int crypto_diskcipher_clearkey(struct crypto_diskcipher *tfm)
