@@ -16,6 +16,9 @@
 #ifndef HIMAX_COMMON_H
 #define HIMAX_COMMON_H
 
+#include <linux/compiler.h>
+#include <linux/sched.h>
+
 #include <asm/segment.h>
 #include <asm/uaccess.h>
 #include <asm/atomic.h>
