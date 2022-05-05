@@ -22,7 +22,6 @@
 
 #include <crypto/algapi.h>
 #include <crypto/skcipher.h>
-#include <crypto/diskcipher.h>
 #include <keys/user-type.h>
 #include <linux/hashtable.h>
 #include <linux/scatterlist.h>
@@ -148,9 +147,6 @@ struct fscrypt_direct_key {
 	refcount_t			dk_refcount;
 	const struct fscrypt_mode	*dk_mode;
 	struct fscrypt_prepared_key	dk_key;
-#if defined(CONFIG_CRYPTO_DISKCIPHER)
-	struct crypto_diskcipher	*dk_dtfm;
-#endif
 	u8				dk_descriptor[FSCRYPT_KEY_DESCRIPTOR_SIZE];
 	u8				dk_raw[FSCRYPT_MAX_KEY_SIZE];
 };
@@ -159,10 +155,6 @@ static void free_direct_key(struct fscrypt_direct_key *dk)
 {
 	if (dk) {
 		fscrypt_destroy_prepared_key(&dk->dk_key);
-#if defined(CONFIG_CRYPTO_DISKCIPHER)
-		if (dk->dk_dtfm)
-			crypto_free_diskcipher(dk->dk_dtfm);
-#endif
 		kzfree(dk);
 	}
 }

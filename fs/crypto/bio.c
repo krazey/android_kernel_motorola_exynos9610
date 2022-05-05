@@ -24,7 +24,6 @@
 #include <linux/module.h>
 #include <linux/bio.h>
 #include <linux/namei.h>
-#include <crypto/diskcipher.h>
 #include "fscrypt_private.h"
 
 void fscrypt_decrypt_bio(struct bio *bio)
@@ -52,15 +51,7 @@ int fscrypt_zeroout_range(const struct inode *inode, pgoff_t lblk,
 	struct bio *bio;
 	int ret, err = 0;
 
-	if (__fscrypt_disk_encrypted(inode)) {
-		ciphertext_page = fscrypt_alloc_bounce_page(GFP_NOWAIT);
-		if (!ciphertext_page || IS_ERR(ciphertext_page)) {
-			return -ENOMEM;
-		}
-
-		memset(page_address(ciphertext_page), 0, PAGE_SIZE);
-		ciphertext_page->mapping = inode->i_mapping;
-	} else if (inlinecrypt) {
+	if (inlinecrypt) {
 		ciphertext_page = ZERO_PAGE(0);
 	} else {
 		ciphertext_page = fscrypt_alloc_bounce_page(GFP_NOWAIT);
@@ -86,7 +77,7 @@ int fscrypt_zeroout_range(const struct inode *inode, pgoff_t lblk,
 
 		bio_set_dev(bio, inode->i_sb->s_bdev);
 		bio->bi_iter.bi_sector = pblk << (blockbits - 9);
-		bio_set_op_attrs(bio, REQ_OP_WRITE, REQ_NOENCRYPT);
+		bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
 		ret = bio_add_page(bio, ciphertext_page, blocksize, 0);
 		if (WARN_ON(ret != blocksize)) {
 			/* should never happen! */
@@ -94,8 +85,6 @@ int fscrypt_zeroout_range(const struct inode *inode, pgoff_t lblk,
 			err = -EIO;
 			goto errout;
 		}
-		fscrypt_set_bio(inode, bio, 0);
-		crypto_diskcipher_debug(FS_ZEROPAGE, bio->bi_opf);
 		err = submit_bio_wait(bio);
 		if (err == 0 && bio->bi_status)
 			err = -EIO;
@@ -112,26 +101,3 @@ errout:
 	return err;
 }
 EXPORT_SYMBOL(fscrypt_zeroout_range);
-
-int fscrypt_disk_encrypted(const struct inode *inode)
-{
-	return __fscrypt_disk_encrypted(inode);
-}
-
-void fscrypt_set_bio(const struct inode *inode, struct bio *bio, u64 dun)
-{
-#ifdef CONFIG_CRYPTO_DISKCIPHER
-	if (__fscrypt_disk_encrypted(inode))
-		crypto_diskcipher_set(bio, inode->i_crypt_info->ci_dtfm, inode, dun);
-#endif
-	return;
-}
-
-void *fscrypt_get_diskcipher(const struct inode *inode)
-{
-#ifdef CONFIG_CRYPTO_DISKCIPHER
-	if (fscrypt_has_encryption_key(inode))
-		return inode->i_crypt_info->ci_dtfm;
-#endif
-       return NULL;
-}

@@ -222,9 +222,6 @@ struct fscrypt_info {
 	union fscrypt_policy ci_policy;
 
 	/* This inode's nonce, copied from the fscrypt_context */
-#ifdef CONFIG_CRYPTO_DISKCIPHER
-	struct crypto_diskcipher *ci_dtfm;
-#endif
 	u8 ci_nonce[FS_KEY_DERIVATION_NONCE_SIZE];
 };
 
@@ -248,9 +245,6 @@ static inline bool fscrypt_valid_enc_modes(u32 contents_mode,
 	    filenames_mode == FSCRYPT_MODE_ADIANTUM)
 		return true;
 
-	if (contents_mode == FSCRYPT_MODE_PRIVATE &&
-		filenames_mode == FSCRYPT_MODE_AES_256_CTS)
-		return true;
 	return false;
 }
 
@@ -563,12 +557,6 @@ extern int __init fscrypt_init_keyring(void);
 
 /* keysetup.c */
 
-enum cipher_flags {
-	CRYPT_MODE_SKCIPHER,
-	CRYPT_MODE_ESSIV,
-	CRYPT_MODE_DISKCIPHER,
-};
-
 struct fscrypt_mode {
 	const char *friendly_name;
 	const char *cipher_str;
@@ -576,7 +564,6 @@ struct fscrypt_mode {
 	int ivsize;
 	int logged_impl_name;
 	enum blk_crypto_mode_num blk_crypto_mode;
-	enum cipher_flags flags;
 };
 
 extern struct fscrypt_mode fscrypt_modes[];
@@ -593,11 +580,6 @@ extern int fscrypt_prepare_key(struct fscrypt_prepared_key *prep_key,
 
 extern void fscrypt_destroy_prepared_key(struct fscrypt_prepared_key *prep_key);
 
-#if defined(CONFIG_CRYPTO_DISKCIPHER)
-extern struct crypto_diskcipher *
-fscrypt_allocate_diskcipher(struct fscrypt_mode *mode, const u8 *raw_key,
-			  const struct inode *inode);
-#endif
 extern int fscrypt_set_derived_key(struct fscrypt_info *ci,
 				   const u8 *derived_key);
 
@@ -620,14 +602,4 @@ extern int fscrypt_policy_from_context(union fscrypt_policy *policy_u,
 				       const union fscrypt_context *ctx_u,
 				       int ctx_size);
 
-static inline int __fscrypt_disk_encrypted(const struct inode *inode)
-{
-#if IS_ENABLED(CONFIG_FS_ENCRYPTION)
-#if IS_ENABLED(CONFIG_CRYPTO_DISKCIPHER)
-	if (inode && inode->i_crypt_info)
-		return S_ISREG(inode->i_mode) && (inode->i_crypt_info->ci_dtfm != NULL);
-#endif
-#endif
-	return 0;
-}
 #endif /* _FSCRYPT_PRIVATE_H */

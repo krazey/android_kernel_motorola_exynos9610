@@ -166,11 +166,6 @@ struct page *fscrypt_encrypt_pagecache_blocks(struct page *page,
 	unsigned int i;
 	int err;
 
-#ifdef CONFIG_CRYPTO_DISKCIPHER_DEBUG
-	if (__fscrypt_disk_encrypted(inode))
-		crypto_diskcipher_debug(FS_ENC_WARN, 0);
-#endif
-
 	if (WARN_ON_ONCE(!PageLocked(page)))
 		return ERR_PTR(-EINVAL);
 
@@ -249,10 +244,6 @@ int fscrypt_decrypt_pagecache_blocks(struct page *page, unsigned int len,
 	unsigned int i;
 	int err;
 
-#ifdef CONFIG_CRYPTO_DISKCIPHER_DEBUG
-	if (__fscrypt_disk_encrypted(inode))
-		crypto_diskcipher_debug(FS_DEC_WARN, 0);
-#endif
 	if (WARN_ON_ONCE(!PageLocked(page)))
 		return -EINVAL;
 

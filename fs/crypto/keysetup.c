@@ -9,7 +9,6 @@
  */
 
 #include <crypto/skcipher.h>
-#include <crypto/diskcipher.h>
 #include <linux/key.h>
 
 #include "fscrypt_private.h"
@@ -48,13 +47,6 @@ struct fscrypt_mode fscrypt_modes[] = {
 		.ivsize = 32,
 		.blk_crypto_mode = BLK_ENCRYPTION_MODE_ADIANTUM,
 	},
-	[FSCRYPT_MODE_PRIVATE] = {
-		.friendly_name = "AES_256-XTS-diskcipher",
-		.cipher_str = "xts(aes)-disk",
-		.keysize = 64,
-		.ivsize = 16,
-		.flags = CRYPT_MODE_DISKCIPHER,
-	},
 };
 
 static struct fscrypt_mode *
@@ -71,35 +63,6 @@ select_encryption_mode(const union fscrypt_policy *policy,
 		  inode->i_ino, (inode->i_mode & S_IFMT));
 	return ERR_PTR(-EINVAL);
 }
-
-#if defined(CONFIG_CRYPTO_DISKCIPHER)
-/* Create a symmetric diskcipher cipher object for the given encryption mode and key */
-struct crypto_diskcipher *fscrypt_allocate_diskcipher(struct fscrypt_mode *mode,
-						  const u8 *raw_key,
-						  const struct inode *inode)
-{
-	struct crypto_diskcipher *tfm;
-	int err;
-	bool force = (mode->flags == CRYPT_MODE_DISKCIPHER) ? 0 : 1;
-
-	tfm = crypto_alloc_diskcipher(mode->cipher_str, 0, 0, force);
-	if (IS_ERR(tfm)) {
-		fscrypt_warn(inode,
-			     "Error allocating '%s' transform: %ld",
-			     mode->cipher_str, PTR_ERR(tfm));
-		return tfm;
-	}
-	err = crypto_diskcipher_setkey(tfm, raw_key, mode->keysize, 0, inode);
-	if (err)
-		goto err_free_dtfm;
-
-	return tfm;
-
-err_free_dtfm:
-	crypto_free_diskcipher(tfm);
-	return ERR_PTR(err);
-}
-#endif
 
 /* Create a symmetric cipher object for the given encryption mode and key */
 static struct crypto_skcipher *

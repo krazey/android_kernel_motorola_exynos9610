@@ -344,14 +344,7 @@ void ext4_io_submit(struct ext4_io_submit *io)
 		int io_op_flags = io->io_wbc->sync_mode == WB_SYNC_ALL ?
 				  REQ_SYNC : 0;
 		io->io_bio->bi_write_hint = io->io_end->inode->i_write_hint;
-		if (io->io_flags & EXT4_IO_ENCRYPTED)
-			io_op_flags |= REQ_NOENCRYPT;
 		bio_set_op_attrs(io->io_bio, REQ_OP_WRITE, io_op_flags);
-		if (IS_ENCRYPTED(io->io_end->inode) &&
-				S_ISREG(io->io_end->inode->i_mode)) {
-			fscrypt_set_bio(io->io_end->inode, io->io_bio, 0);
-			crypto_diskcipher_debug(FS_PAGEIO, io->io_bio->bi_opf);
-		}
 		submit_bio(io->io_bio);
 	}
 	io->io_bio = NULL;
@@ -360,7 +353,6 @@ void ext4_io_submit(struct ext4_io_submit *io)
 void ext4_io_submit_init(struct ext4_io_submit *io,
 			 struct writeback_control *wbc)
 {
-	io->io_flags = 0;
 	io->io_wbc = wbc;
 	io->io_bio = NULL;
 	io->io_end = NULL;
@@ -479,8 +471,7 @@ int ext4_bio_write_page(struct ext4_io_submit *io,
 
 	bh = head = page_buffers(page);
 
-	if (fscrypt_inode_uses_fs_layer_crypto(inode) && nr_to_submit &&
-	    !fscrypt_disk_encrypted(inode)) {
+	if (fscrypt_inode_uses_fs_layer_crypto(inode) && nr_to_submit) {
 		gfp_t gfp_flags = GFP_NOFS;
 
 	retry_encrypt:
