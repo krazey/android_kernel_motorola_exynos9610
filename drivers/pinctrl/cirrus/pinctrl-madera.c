@@ -482,6 +482,7 @@ static int madera_get_group_pins(struct pinctrl_dev *pctldev,
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_DEBUG_FS)
 static void madera_pin_dbg_show_fn(struct madera_pin_private *priv,
 				   struct seq_file *s,
 				   unsigned int pin, unsigned int fn)
@@ -511,6 +512,7 @@ static void madera_pin_dbg_show_fn(struct madera_pin_private *priv,
 		}
 	}
 }
+#endif
 
 static void madera_pin_dbg_show(struct pinctrl_dev *pctldev,
 				struct seq_file *s,
