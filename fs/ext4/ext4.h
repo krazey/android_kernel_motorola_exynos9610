@@ -1552,7 +1552,6 @@ struct ext4_sb_info {
 	 * or EXTENTS flag.
 	 */
 	struct percpu_rw_semaphore s_writepages_rwsem;
-
 	struct dax_device *s_daxdev;
 };
 

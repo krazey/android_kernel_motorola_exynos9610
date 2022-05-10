@@ -2247,8 +2247,6 @@ static int _ext4_show_options(struct seq_file *seq, struct super_block *sb,
 
 	fscrypt_show_test_dummy_encryption(seq, sep, sb);
 
-	fscrypt_show_test_dummy_encryption(seq, sep, sb);
-
 	ext4_show_quota_options(seq, sb);
 	return 0;
 }

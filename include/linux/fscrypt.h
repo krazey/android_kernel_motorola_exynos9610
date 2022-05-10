@@ -18,11 +18,6 @@
 #include <linux/parser.h>
 #include <linux/slab.h>
 #include <uapi/linux/fscrypt.h>
-#include <linux/bio.h>
-#include <linux/dcache.h>
-#include <crypto/skcipher.h>
-#include <uapi/linux/fs.h>
-#include <crypto/diskcipher.h>
 
 #define FS_CRYPTO_BLOCK_SIZE		16
 
@@ -531,6 +526,7 @@ static inline int __fscrypt_prepare_symlink(struct inode *dir,
 {
 	return -EOPNOTSUPP;
 }
+
 
 static inline int __fscrypt_encrypt_symlink(struct inode *inode,
 					    const char *target,

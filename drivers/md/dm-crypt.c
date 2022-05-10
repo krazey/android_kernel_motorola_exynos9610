@@ -37,7 +37,6 @@
 #include <keys/user-type.h>
 
 #include <linux/device-mapper.h>
-#include <crypto/diskcipher.h>
 
 #define DM_MSG_PREFIX "crypt"
 
@@ -126,14 +125,11 @@ struct iv_tcw_private {
  * and encrypts / decrypts at the same time.
  */
 enum flags { DM_CRYPT_SUSPENDED, DM_CRYPT_KEY_VALID,
-	     DM_CRYPT_SAME_CPU, DM_CRYPT_NO_OFFLOAD,
-	     DM_CRYPT_ENCRYPT_OVERRIDE };
+	     DM_CRYPT_SAME_CPU, DM_CRYPT_NO_OFFLOAD };
 
 enum cipher_flags {
 	CRYPT_MODE_INTEGRITY_AEAD,	/* Use authenticated mode for cihper */
 	CRYPT_IV_LARGE_SECTORS,		/* Calculate IV from sector_size, not 512B sectors */
-	CRYPT_MODE_DISKCIPHER,
-	CRYPT_MODE_SKCIPHER,
 };
 
 /*
@@ -186,7 +182,6 @@ struct crypt_config {
 	union {
 		struct crypto_skcipher **tfms;
 		struct crypto_aead **tfms_aead;
-		struct crypto_diskcipher **tfms_diskc;
 	} cipher_tfm;
 	unsigned tfms_count;
 	unsigned long cipher_flags;
@@ -923,17 +918,6 @@ static bool crypt_integrity_hmac(struct crypt_config *cc)
 	return crypt_integrity_aead(cc) && cc->key_mac_size;
 }
 
-static bool crypt_mode_diskcipher(struct crypt_config *cc)
-{
-	return test_bit(CRYPT_MODE_DISKCIPHER, &cc->cipher_flags);
-}
-
-static bool crypt_mode_skcipher(struct crypt_config *cc)
-{
-	return test_bit(CRYPT_MODE_SKCIPHER, &cc->cipher_flags);
-}
-
-
 /* Get sg containing data */
 static struct scatterlist *crypt_get_sg_data(struct crypt_config *cc,
 					     struct scatterlist *sg)
@@ -1550,13 +1534,13 @@ static void crypt_endio(struct bio *clone)
 	/*
 	 * free the processed pages
 	 */
-	if ((rw == WRITE) && !crypt_mode_diskcipher(cc))
+	if (rw == WRITE)
 		crypt_free_buffer_pages(cc, clone);
 
 	error = clone->bi_status;
 	bio_put(clone);
 
-	if (rw == READ && !error && !crypt_mode_diskcipher(cc)) {
+	if (rw == READ && !error) {
 		kcryptd_queue_crypt(io);
 		return;
 	}
@@ -1595,10 +1579,6 @@ static int kcryptd_io_read(struct dm_crypt_io *io, gfp_t gfp)
 	crypt_inc_pending(io);
 
 	clone_init(io, clone);
-
-	if (crypt_mode_diskcipher(cc))
-		crypto_diskcipher_set(clone, cc->cipher_tfm.tfms_diskc[0], NULL, 0);
-
 	clone->bi_iter.bi_sector = cc->start + io->sector;
 
 	if (dm_crypt_integrity_io_alloc(io, clone)) {
@@ -1892,28 +1872,10 @@ static void crypt_free_tfms_skcipher(struct crypt_config *cc)
 	cc->cipher_tfm.tfms = NULL;
 }
 
-static void crypt_free_tfms_diskcipher(struct crypt_config *cc)
-{
-	if (!cc->cipher_tfm.tfms_diskc)
-		return;
-
-	if (cc->cipher_tfm.tfms_diskc[0] && !IS_ERR(cc->cipher_tfm.tfms_diskc[0])) {
-		crypto_diskcipher_clearkey(cc->cipher_tfm.tfms_diskc[0]);
-		crypto_free_diskcipher(cc->cipher_tfm.tfms_diskc[0]);
-		cc->cipher_tfm.tfms_diskc[0] = NULL;
-	}
-
-	kfree(cc->cipher_tfm.tfms_diskc);
-	cc->cipher_tfm.tfms_diskc = NULL;
-}
-
-
 static void crypt_free_tfms(struct crypt_config *cc)
 {
 	if (crypt_integrity_aead(cc))
 		crypt_free_tfms_aead(cc);
-	else if (crypt_mode_diskcipher(cc))
-		crypt_free_tfms_diskcipher(cc);
 	else
 		crypt_free_tfms_skcipher(cc);
 }
@@ -1936,7 +1898,6 @@ static int crypt_alloc_tfms_skcipher(struct crypt_config *cc, char *ciphermode)
 			return err;
 		}
 	}
-	set_bit(CRYPT_MODE_SKCIPHER, &cc->cipher_flags);
 
 	/*
 	 * dm-crypt performance can vary greatly depending on which crypto
@@ -1968,32 +1929,10 @@ static int crypt_alloc_tfms_aead(struct crypt_config *cc, char *ciphermode)
 	return 0;
 }
 
-static int crypt_alloc_tfms_diskcipher(struct crypt_config *cc, char *ciphermode)
-{
-	int err;
-
-	cc->cipher_tfm.tfms = kmalloc(sizeof(struct crypto_aead *), GFP_KERNEL);
-	if (!cc->cipher_tfm.tfms)
-		return -ENOMEM;
-
-	cc->cipher_tfm.tfms_diskc[0] = crypto_alloc_diskcipher(ciphermode, 0, 0, 1);
-	if (IS_ERR(cc->cipher_tfm.tfms_diskc[0])) {
-		err = PTR_ERR(cc->cipher_tfm.tfms_diskc[0]);
-		crypt_free_tfms(cc);
-		pr_err("%s: no diskcipher with %s\n", __func__, ciphermode);
-		return err;
-	}
-	pr_info("%s is done with %s\n", __func__, ciphermode);
-
-	return 0;
-}
-
 static int crypt_alloc_tfms(struct crypt_config *cc, char *ciphermode)
 {
 	if (crypt_integrity_aead(cc))
 		return crypt_alloc_tfms_aead(cc, ciphermode);
-	else if (crypt_mode_diskcipher(cc))
-		return crypt_alloc_tfms_diskcipher(cc, ciphermode);
 	else
 		return crypt_alloc_tfms_skcipher(cc, ciphermode);
 }
@@ -2055,12 +1994,6 @@ static int crypt_setkey(struct crypt_config *cc)
 			r = crypto_aead_setkey(cc->cipher_tfm.tfms_aead[i],
 					       cc->key + (i * subkey_size),
 					       subkey_size);
-#ifdef CONFIG_CRYPTO_DISKCIPHER
-		else if (crypt_mode_diskcipher(cc))
-			r = crypto_diskcipher_setkey(cc->cipher_tfm.tfms_diskc[i],
-						   cc->key + (i * subkey_size),
-						   subkey_size, 1, NULL);
-#endif
 		else
 			r = crypto_skcipher_setkey(cc->cipher_tfm.tfms[i],
 						   cc->key + (i * subkey_size),
@@ -2536,7 +2469,7 @@ static int crypt_ctr_cipher_new(struct dm_target *ti, char *cipher_in, char *key
 			return -ENOMEM;
 		}
 		cc->iv_size = crypto_aead_ivsize(any_tfm_aead(cc));
-	} else if (crypt_mode_skcipher(cc))
+	} else
 		cc->iv_size = crypto_skcipher_ivsize(any_tfm(cc));
 
 	ret = crypt_ctr_blkdev_cipher(cc);
@@ -2586,12 +2519,6 @@ static int crypt_ctr_cipher_old(struct dm_target *ti, char *cipher_in, char *key
 	chainmode = strsep(&tmp, "-");
 	*ivmode = strsep(&tmp, ":");
 	*ivopts = tmp;
-
-	if (*ivmode && (!strcmp(*ivmode, "disk") || !strcmp(*ivmode, "fmp")))
-		set_bit(CRYPT_MODE_DISKCIPHER, &cc->cipher_flags);
-
-	if (tmp)
-		DMWARN("Ignoring unexpected additional cipher options");
 
 	/*
 	 * For compatibility with the original dm-crypt mapping format, if
@@ -2653,11 +2580,9 @@ static int crypt_ctr_cipher(struct dm_target *ti, char *cipher_in, char *key)
 		return ret;
 
 	/* Initialize IV */
-	if (!crypt_mode_diskcipher(cc)) {
-		ret = crypt_ctr_ivmode(ti, ivmode);
-		if (ret < 0)
-			return ret;
-	}
+	ret = crypt_ctr_ivmode(ti, ivmode);
+	if (ret < 0)
+		return ret;
 
 	/* Initialize and set key */
 	ret = crypt_set_key(cc, key);
@@ -2687,11 +2612,6 @@ static int crypt_ctr_cipher(struct dm_target *ti, char *cipher_in, char *key)
 	/* wipe the kernel key payload copy */
 	if (cc->key_string)
 		memset(cc->key, 0, cc->key_size * sizeof(u8));
-
-	pr_info("%s with ivmode:%s, aead:%d, diskcipher:%d(%p), skcipher:%d\n",
-			__func__, ivmode, crypt_integrity_aead(cc),
-			crypt_mode_diskcipher(cc), cc->cipher_tfm.tfms_diskc[0],
-			crypt_mode_skcipher(cc));
 
 	return ret;
 }
@@ -2762,8 +2682,6 @@ static int crypt_ctr_optional(struct dm_target *ti, unsigned int argc, char **ar
 			cc->sector_shift = __ffs(cc->sector_size) - SECTOR_SHIFT;
 		} else if (!strcasecmp(opt_string, "iv_large_sectors"))
 			set_bit(CRYPT_IV_LARGE_SECTORS, &cc->cipher_flags);
-		else if (!strcasecmp(opt_string, "allow_encrypt_override"))
-			set_bit(DM_CRYPT_ENCRYPT_OVERRIDE, &cc->flags);
 		else {
 			ti->error = "Invalid feature arguments";
 			return -EINVAL;
@@ -2828,14 +2746,11 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	ret = crypt_ctr_cipher(ti, argv[0], argv[1]);
 	if (ret < 0)
 		goto bad;
+
 	if (crypt_integrity_aead(cc)) {
 		cc->dmreq_start = sizeof(struct aead_request);
 		cc->dmreq_start += crypto_aead_reqsize(any_tfm_aead(cc));
 		align_mask = crypto_aead_alignmask(any_tfm_aead(cc));
-	} else if (crypt_mode_diskcipher(cc)) {
-		cc->per_bio_data_size = ti->per_io_data_size =
-			ALIGN(sizeof(struct dm_crypt_io), ARCH_KMALLOC_MINALIGN);
-		goto get_bio;
 	} else {
 		cc->dmreq_start = sizeof(struct skcipher_request);
 		cc->dmreq_start += crypto_skcipher_reqsize(any_tfm(cc));
@@ -2881,7 +2796,6 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		goto bad;
 	}
 
-get_bio:
 	cc->bs = bioset_create(MIN_IOS, 0, (BIOSET_NEED_BVECS |
 					    BIOSET_NEED_RESCUER));
 	if (!cc->bs) {
@@ -2939,12 +2853,6 @@ get_bio:
 		goto bad;
 	}
 
-	if (crypt_mode_diskcipher(cc)) {
-		cc->crypt_queue = NULL;
-		cc->write_thread = NULL;
-		goto out;
-	}
-
 	if (test_bit(DM_CRYPT_SAME_CPU, &cc->flags))
 		cc->crypt_queue = alloc_workqueue("kcryptd", WQ_HIGHPRI | WQ_CPU_INTENSIVE | WQ_MEM_RECLAIM, 1);
 	else
@@ -2968,7 +2876,6 @@ get_bio:
 	}
 	wake_up_process(cc->write_thread);
 
-out:
 	ti->num_flush_bios = 1;
 
 	return 0;
@@ -2984,15 +2891,12 @@ static int crypt_map(struct dm_target *ti, struct bio *bio)
 	struct crypt_config *cc = ti->private;
 
 	/*
-	 * If bio is REQ_PREFLUSH, REQ_NOENCRYPT, or REQ_OP_DISCARD,
-	 * just bypass crypt queues.
+	 * If bio is REQ_PREFLUSH or REQ_OP_DISCARD, just bypass crypt queues.
 	 * - for REQ_PREFLUSH device-mapper core ensures that no IO is in-flight
 	 * - for REQ_OP_DISCARD caller must use flush if IO ordering matters
 	 */
-	if (unlikely(bio->bi_opf & REQ_PREFLUSH) ||
-	    (unlikely(bio->bi_opf & REQ_NOENCRYPT) &&
-	     test_bit(DM_CRYPT_ENCRYPT_OVERRIDE, &cc->flags)) ||
-	    bio_op(bio) == REQ_OP_DISCARD) {
+	if (unlikely(bio->bi_opf & REQ_PREFLUSH ||
+	    bio_op(bio) == REQ_OP_DISCARD)) {
 		bio_set_dev(bio, cc->dev->bdev);
 		if (bio_sectors(bio))
 			bio->bi_iter.bi_sector = cc->start +
@@ -3035,10 +2939,10 @@ static int crypt_map(struct dm_target *ti, struct bio *bio)
 
 	if (crypt_integrity_aead(cc))
 		io->ctx.r.req_aead = (struct aead_request *)(io + 1);
-	else if (crypt_mode_skcipher(cc))
+	else
 		io->ctx.r.req = (struct skcipher_request *)(io + 1);
 
-	if ((bio_data_dir(io->base_bio) == READ) || crypt_mode_diskcipher(cc)) {
+	if (bio_data_dir(io->base_bio) == READ) {
 		if (kcryptd_io_read(io, GFP_NOWAIT))
 			kcryptd_queue_read(io);
 	} else
@@ -3079,7 +2983,6 @@ static void crypt_status(struct dm_target *ti, status_type_t type,
 		num_feature_args += test_bit(DM_CRYPT_NO_OFFLOAD, &cc->flags);
 		num_feature_args += cc->sector_size != (1 << SECTOR_SHIFT);
 		num_feature_args += test_bit(CRYPT_IV_LARGE_SECTORS, &cc->cipher_flags);
-		num_feature_args += test_bit(DM_CRYPT_ENCRYPT_OVERRIDE, &cc->flags);
 		if (cc->on_disk_tag_size)
 			num_feature_args++;
 		if (num_feature_args) {
@@ -3096,8 +2999,6 @@ static void crypt_status(struct dm_target *ti, status_type_t type,
 				DMEMIT(" sector_size:%d", cc->sector_size);
 			if (test_bit(CRYPT_IV_LARGE_SECTORS, &cc->cipher_flags))
 				DMEMIT(" iv_large_sectors");
-			if (test_bit(DM_CRYPT_ENCRYPT_OVERRIDE, &cc->flags))
-				DMEMIT(" allow_encrypt_override");
 		}
 
 		break;
@@ -3205,9 +3106,6 @@ static void crypt_io_hints(struct dm_target *ti, struct queue_limits *limits)
 	limits->physical_block_size =
 		max_t(unsigned, limits->physical_block_size, cc->sector_size);
 	limits->io_min = max_t(unsigned, limits->io_min, cc->sector_size);
-
-	if (crypt_mode_diskcipher(cc))
-		limits->logical_block_size = PAGE_SIZE;
 }
 
 static struct target_type crypt_target = {
