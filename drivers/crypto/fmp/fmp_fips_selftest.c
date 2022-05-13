@@ -75,7 +75,7 @@ static void free_buf(char *buf[XBUFSIZE])
 		free_page((unsigned long)buf[i]);
 }
 
-static struct cipher_testvec aes_xts_enc_tv_template[] = {
+static const struct cipher_testvec aes_xts_enc_tv_template[] = {
 	/* http://grouper.ieee.org/groups/1619/email/pdf00086.pdf */
 	{ /* XTS-AES 1 */
 		.key    = "\xa1\xb9\x0c\xba\x3f\x06\xac\x35"
@@ -410,7 +410,7 @@ static struct cipher_testvec aes_xts_enc_tv_template[] = {
 	}
 };
 
-static struct cipher_testvec aes_cbc_enc_tv_template[] = {
+static const struct cipher_testvec aes_cbc_enc_tv_template[] = {
 	{ /* From RFC 3602 */
 		.key    = "\x06\xa9\x21\x40\x36\xb8\xa1\x5b"
 			  "\x51\x2e\x03\xd5\x34\x12\x00\x06",
@@ -606,7 +606,7 @@ static struct cipher_testvec aes_cbc_enc_tv_template[] = {
  */
 #define SHA256_TEST_VECTORS     2
 
-static struct hash_testvec sha256_tv_template[] = {
+static const struct hash_testvec sha256_tv_template[] = {
 	{
 		.plaintext = "abc",
 		.psize  = 3,
@@ -632,7 +632,7 @@ static struct hash_testvec sha256_tv_template[] = {
  */
 #define HMAC_SHA256_TEST_VECTORS	10
 
-static struct hash_testvec hmac_sha256_tv_template[] = {
+static const struct hash_testvec hmac_sha256_tv_template[] = {
 	{
 		.key	= "\x01\x02\x03\x04\x05\x06\x07\x08"
 			  "\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10"
@@ -783,7 +783,7 @@ static int selftest_sha256(struct exynos_fmp *fmp)
 	test_vops = (struct exynos_fmp_fips_test_vops *)fmp->test_vops;
 
 	for (i = 0; i < SHA256_TEST_VECTORS; i++) {
-		if (0 != sha256(sha256_tv_template[i].plaintext, sha256_tv_template[i].psize, buf))
+		if (0 != fmp_sha256(sha256_tv_template[i].plaintext, sha256_tv_template[i].psize, buf))
 			return -EINVAL;
 
 		memcpy(temp_digest, sha256_tv_template[i].digest, SHA256_DIGEST_LENGTH);
@@ -855,7 +855,7 @@ static int selftest_hmac_sha256(struct exynos_fmp *fmp)
 	return ret;
 }
 
-static int fmp_test_run(struct exynos_fmp *fmp, struct cipher_testvec *template,
+static int fmp_test_run(struct exynos_fmp *fmp, const struct cipher_testvec *template,
 				const int idx, uint8_t *data, uint32_t len,
 				const int mode, uint32_t write)
 {
@@ -906,7 +906,7 @@ err:
 }
 
 static int test_cipher(struct exynos_fmp *fmp, int mode,
-			struct cipher_testvec *template, uint32_t tcount)
+			const struct cipher_testvec *template, uint32_t tcount)
 {
 	int ret;
 	uint32_t idx;
@@ -1024,7 +1024,7 @@ int do_fmp_selftest(struct exynos_fmp *fmp)
 	if (ret) {
 		dev_err(fmp->dev, "FIPS: self-tests for FMP aes-xts failed\n");
 		fmp->result.aes_xts = 0;
-		goto err_xts_cipher;
+		goto err;
 	}
 	dev_info(fmp->dev, "FIPS: self-tests for FMP aes-xts passed\n");
 	fmp->result.aes_xts = 1;
@@ -1037,32 +1037,31 @@ int do_fmp_selftest(struct exynos_fmp *fmp)
 	if (ret) {
 		dev_err(fmp->dev, "FIPS: self-tests for FMP aes-cbc failed\n");
 		fmp->result.aes_cbc = 0;
-		goto err_cbc_cipher;
+		goto err;
 	}
 	dev_info(fmp->dev, "FIPS: self-tests for FMP aes-cbc passed\n");
 	fmp->result.aes_cbc = 1;
 
 	ret = selftest_sha256(fmp);
 	if (ret) {
-		dev_err(fmp->dev, "FIPS: self-tests for UFSFMP %s failed\n", ALG_SHA256_FMP);
+		dev_err(fmp->dev, "FIPS: self-tests for FMP %s failed\n", ALG_SHA256_FMP);
 		fmp->result.sha256 = 0;
-		goto err_xts_cipher;
+		goto err;
 	}
 	dev_info(fmp->dev, "FIPS: self-tests for FMP %s passed\n", ALG_SHA256_FMP);
 	fmp->result.sha256 = 1;
 
 	ret = selftest_hmac_sha256(fmp);
 	if (ret) {
-		dev_err(fmp->dev, "FIPS: self-tests for UFSFMP %s failed\n", ALG_HMAC_SHA256_FMP);
+		dev_err(fmp->dev, "FIPS: self-tests for FMP %s failed\n", ALG_HMAC_SHA256_FMP);
 		fmp->result.hmac = 0;
-		goto err_xts_cipher;
+		goto err;
 	}
-	dev_info(fmp->dev, "FIPS: self-tests for UFSFMP %s passed\n", ALG_HMAC_SHA256_FMP);
+	dev_info(fmp->dev, "FIPS: self-tests for FMP %s passed\n", ALG_HMAC_SHA256_FMP);
 	fmp->result.hmac = 1;
 
 	return 0;
 
-err_cbc_cipher:
-err_xts_cipher:
+err:
 	return -1;
 }

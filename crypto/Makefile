@@ -9,7 +9,11 @@ crypto-y := api.o cipher.o compress.o memneq.o
 obj-$(CONFIG_CRYPTO_WORKQUEUE) += crypto_wq.o
 
 obj-$(CONFIG_CRYPTO_ENGINE) += crypto_engine.o
-obj-$(CONFIG_CRYPTO_FIPS) += fips.o
+obj-$(CONFIG_CRYPTO_FIPS) += fips140_out.o
+obj-$(CONFIG_CRYPTO_FIPS) += fips140_integrity.o
+obj-$(CONFIG_CRYPTO_FIPS) += fips140_post.o
+obj-$(CONFIG_CRYPTO_FIPS) += fips140_test.o
+obj-$(CONFIG_CRYPTO_FIPS) += fips140_test_tv.o
 
 crypto_algapi-$(CONFIG_PROC_FS) += proc.o
 crypto_algapi-y := algapi.o scatterwalk.o $(crypto_algapi-y)

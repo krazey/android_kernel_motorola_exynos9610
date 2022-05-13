@@ -1,71 +1,67 @@
 /*
- * Perform FIPS Integrity test on FMP driver
- *
- * At build time, hmac(sha256) of crypto code, avaiable in different ELF sections
- * of vmlinux file, is generated. vmlinux file is updated with built-time hmac
- * in a read-only data variable, so that it is available at run-time
- *
- * At run time, hmac(sha256) is again calculated using crypto bytes of a running
- * At run time, hmac-fmp(sha256-fmp) is again calculated using crypto bytes of a running
- * kernel.
- * Run time hmac is compared to built time hmac to verify the integrity.
- *
- *
- * Author : Rohit Kothari (r.kothari@samsung.com)
- * Date	  : 11 Feb 2014
- *
- * Copyright (c) 2014 Samsung Electronics
- *
+ * Created in Samsung Ukraine R&D Center (SRK) under a contract between
+ * LLC "Samsung Electronics Ukraine Company" (Kyiv, Ukraine)
+ * and "Samsung Electronics Co", Ltd (Seoul, Republic of Korea)
+ * Copyright: (c) Samsung Electronics Co, Ltd 2020. All rights reserved.
  */
-
-#include <linux/kallsyms.h>
-#include <linux/err.h>
-#include <linux/scatterlist.h>
-#include <linux/smc.h>
-
+#include <linux/kernel.h>
+#include <linux/module.h>
 #include <crypto/fmp.h>
-
 #include "hmac-sha256.h"
 #include "fmp_fips_info.h"
-#include "fmp_fips_integrity.h"
+#include "fips140_ic_support.h"
+
+#define FIPS_HMAC_SIZE 32
 
 #define FIPS_CHECK_INTEGRITY
 #undef FIPS_DEBUG_INTEGRITY
 
 /* Same as build time */
-static const unsigned char *integrity_check_key = "The quick brown fox jumps over the lazy dog";
+static const unsigned char *integrity_check_key =
+	"The quick brown fox jumps over the lazy dog";
 
-/*
- * This function return kernel offset.
- * If CONFIG_RELOCATABLE is set
- * Then the kernel will be placed into the random offset in memory
- * At the build time, we write self address of the "buildtime_address"
- * to the "buildtime_address" variable
- */
-static __u64 get_kernel_offset(void)
+#ifdef FIPS_DEBUG_INTEGRITY
+void show_emebedded_info(void)
 {
-	static __u64 runtime_address = (__u64) &fmp_buildtime_address;
-	__u64 kernel_offset = abs(fmp_buildtime_address - runtime_address);
-	return kernel_offset;
+	int i = 0;
+	int j = 0;
+
+	for (i = 0; i < fips140_sec_amount; i++) {
+		pr_info("Section #%d\n", i);
+		pr_info(" anchor symbols addr/offset %llx/%d\n",
+			fips140_get_anchor_addr(i), fips140_anchor_offset[i]);
+	}
+
+	pr_info(" Chunks amount: %d\n", fips140_chunk_amount);
+	for (j = 0; j < fips140_chunk_amount; j++) {
+		pr_info("[ chunk #%d, sec: %d start: %d end: %d ]",
+		j,
+		fips140_chunks_info[j].sec_no,
+		fips140_chunks_info[j].chunk_start,
+		fips140_chunks_info[j].chunk_end);
+	}
 }
+#endif
 
 int do_fmp_integrity_check(struct exynos_fmp *fmp)
 {
-	int i, rows, err;
-	unsigned long start_addr = 0;
-	unsigned long end_addr = 0;
-	unsigned char runtime_hmac[32];
+	int err = 0;
+	uint8_t *start_addr = NULL;
+	unsigned char runtime_hmac[FIPS_HMAC_SIZE];
+	uint32_t sec_idx = 0;
+	uint8_t *sec_zero_addr = NULL;
+	uint32_t ch = 0;
+	uint32_t size = 0;
 	struct hmac_sha256_ctx ctx;
 	const char *builtime_hmac = 0;
-	unsigned int size = 0;
-#ifdef FIPS_DEBUG_INTEGRITY
-	unsigned int covered = 0;
-	unsigned int num_addresses = 0;
-#endif
 	struct exynos_fmp_fips_test_vops *test_vops;
 
 #ifndef FIPS_CHECK_INTEGRITY
 	return 0;
+#endif
+
+#ifdef FIPS_DEBUG_INTEGRITY
+	show_emebedded_info();
 #endif
 
 	if (!fmp || !fmp->dev) {
@@ -75,59 +71,55 @@ int do_fmp_integrity_check(struct exynos_fmp *fmp)
 
 	memset(runtime_hmac, 0x00, 32);
 
-	err = hmac_sha256_init(&ctx, integrity_check_key, strlen(integrity_check_key));
+	err = hmac_sha256_init(&ctx,
+				integrity_check_key,
+				strlen(integrity_check_key));
 	if (err) {
 		pr_err("FIPS(%s): init_hash failed\n", __func__);
 		return -1;
 	}
 
-	rows = (__u32) ARRAY_SIZE(integrity_fmp_addrs);
+	for (sec_idx = 0; sec_idx < fips140_sec_amount; sec_idx++) {
+		sec_zero_addr = (uint8_t *)(fips140_get_anchor_addr(sec_idx)
+				- fips140_anchor_offset[sec_idx]);
 
-	for (i = 0; integrity_fmp_addrs[i].first && i < rows; i++) {
+		for (ch = 0; ch < fips140_chunk_amount; ch++) {
+			if (fips140_chunks_info[ch].sec_no != sec_idx)
+				continue;
 
-		start_addr = integrity_fmp_addrs[i].first + get_kernel_offset();
-		end_addr   = integrity_fmp_addrs[i].last  + get_kernel_offset();
-
-		/* Print addresses for HMAC calculation */
+			start_addr = fips140_chunks_info[ch].chunk_start
+						+ sec_zero_addr;
+			size = fips140_chunks_info[ch].chunk_end
+				- fips140_chunks_info[ch].chunk_start
+				+ 1;
 #ifdef FIPS_DEBUG_INTEGRITY
-		pr_info("FIPS_DEBUG_INTEGRITY : first last %08llux %08llux\n",
-			integrity_fmp_addrs[i].first,
-			integrity_fmp_addrs[i].last);
-		covered += (end_addr - start_addr);
+			print_hex_dump(KERN_ERR, " FIPS_chunks >>> : ",
+			DUMP_PREFIX_ADDRESS, 16, 1, start_addr, size, false);
 #endif
-
-		size = (uint32_t)(end_addr - start_addr);
-
-		err = hmac_sha256_update(&ctx, (unsigned char *)start_addr, size);
-		if (err) {
-			pr_err("FIPS(%s): Error to update hash", __func__);
-			return -1;
+			err = hmac_sha256_update(&ctx, start_addr, size);
+			if (err) {
+				pr_err("FIPS(%s): Error to update hash",
+					__func__);
+				return -1;
+			}
 		}
 	}
 
 	test_vops = (struct exynos_fmp_fips_test_vops *)fmp->test_vops;
 
 	if (test_vops) {
-		err = test_vops->integrity(&ctx, &start_addr);
+		// Weird code here and in fmp_func_test_integrity
+		// in fmp_fips_func_test.c. To be revised
+		unsigned long ic_fail_data = 0x5a5a5a5a;
+
+		err = test_vops->integrity(&ctx, &ic_fail_data);
 		if (err) {
 			pr_err("FIPS(%s): Error to update hash for func test\n",
 				__func__);
+			hmac_sha256_ctx_cleanup(&ctx);
 			return -1;
 		}
 	}
-
-/* Dump bytes for HMAC */
-#ifdef FIPS_DEBUG_INTEGRITY
-	num_addresses = i;
-	for (i = 0; integrity_fmp_addrs[i].first && i < rows; i++) {
-		start_addr = integrity_fmp_addrs[i].first + get_kernel_offset();
-		end_addr   = integrity_fmp_addrs[i].last  + get_kernel_offset();
-		size = (uint32_t)(end_addr - start_addr);
-		print_hex_dump(KERN_INFO, "FIPS_DEBUG_INTEGRITY : bytes for HMAC = ",
-			DUMP_PREFIX_NONE, 16, 1,
-			(char *)start_addr, size, false);
-	}
-#endif
 
 	err = hmac_sha256_final(&ctx, runtime_hmac);
 	if (err) {
@@ -137,14 +129,13 @@ int do_fmp_integrity_check(struct exynos_fmp *fmp)
 	}
 
 	hmac_sha256_ctx_cleanup(&ctx);
-	builtime_hmac = builtime_fmp_hmac;
+	builtime_hmac = fips140_builtime_hmac;
 
 #ifdef FIPS_DEBUG_INTEGRITY
-	pr_info("FIPS_DEBUG_INTEGRITY : %d bytes are covered, Address fragments (%d)", covered, num_addresses);
 	print_hex_dump(KERN_INFO, "FIPS FMP RUNTIME : runtime hmac  = ",
-		DUMP_PREFIX_NONE, 16, 1, runtime_hmac, sizeof(runtime_hmac), false);
+	DUMP_PREFIX_NONE, 16, 1, runtime_hmac, sizeof(runtime_hmac), false);
 	print_hex_dump(KERN_INFO, "FIPS FMP RUNTIME : builtime_hmac = ",
-		DUMP_PREFIX_NONE, 16, 1, builtime_hmac, sizeof(runtime_hmac), false);
+	DUMP_PREFIX_NONE, 16, 1, builtime_hmac, sizeof(runtime_hmac), false);
 #endif
 
 	if (!memcmp(builtime_hmac, runtime_hmac, sizeof(runtime_hmac))) {
@@ -155,4 +146,3 @@ int do_fmp_integrity_check(struct exynos_fmp *fmp)
 	pr_err("FIPS(%s): Integrity Check Failed", __func__);
 	return -1;
 }
-EXPORT_SYMBOL_GPL(do_fmp_integrity_check);

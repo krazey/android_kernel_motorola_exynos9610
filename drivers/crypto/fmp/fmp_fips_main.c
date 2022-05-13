@@ -19,6 +19,9 @@
 #include <crypto/authenc.h>
 #include <crypto/fmp.h>
 
+#if defined(CONFIG_EXYNOS_FMP_FIPS_FUNC_TEST)
+#include "fmp_fips_func_test.h"
+#endif
 #include "fmp_fips_main.h"
 #include "fmp_fips_fops.h"
 #include "fmp_fips_selftest.h"
@@ -57,7 +60,7 @@ static void set_fmp_fips_state(uint32_t val)
 	fmp_fips_state = val;
 }
 
-static ssize_t fmp_fips_result_show(struct device *dev,
+static ssize_t fmp_fips_status_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct exynos_fmp *fmp = dev_get_drvdata(dev);
@@ -65,7 +68,7 @@ static ssize_t fmp_fips_result_show(struct device *dev,
 	return snprintf(buf, sizeof(pass), "%s\n", fmp->result.overall ? pass : fail);
 }
 
-static ssize_t fmp_fips_aes_xts_result_show(struct device *dev,
+static ssize_t aes_xts_status_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct exynos_fmp *fmp = dev_get_drvdata(dev);
@@ -73,7 +76,7 @@ static ssize_t fmp_fips_aes_xts_result_show(struct device *dev,
 	return snprintf(buf, sizeof(pass), "%s\n", fmp->result.aes_xts ? pass : fail);
 }
 
-static ssize_t fmp_fips_aes_cbc_result_show(struct device *dev,
+static ssize_t aes_cbc_status_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct exynos_fmp *fmp = dev_get_drvdata(dev);
@@ -81,7 +84,7 @@ static ssize_t fmp_fips_aes_cbc_result_show(struct device *dev,
 	return snprintf(buf, sizeof(pass), "%s\n", fmp->result.aes_cbc ? pass : fail);
 }
 
-static ssize_t fmp_fips_sha256_result_show(struct device *dev,
+static ssize_t sha256_status_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct exynos_fmp *fmp = dev_get_drvdata(dev);
@@ -89,7 +92,7 @@ static ssize_t fmp_fips_sha256_result_show(struct device *dev,
 	return snprintf(buf, sizeof(pass), "%s\n", fmp->result.sha256 ? pass : fail);
 }
 
-static ssize_t fmp_fips_hmac_result_show(struct device *dev,
+static ssize_t hmac_status_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct exynos_fmp *fmp = dev_get_drvdata(dev);
@@ -97,7 +100,7 @@ static ssize_t fmp_fips_hmac_result_show(struct device *dev,
 	return snprintf(buf, sizeof(pass), "%s\n", fmp->result.hmac ? pass : fail);
 }
 
-static ssize_t fmp_fips_integrity_result_show(struct device *dev,
+static ssize_t integrity_status_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct exynos_fmp *fmp = dev_get_drvdata(dev);
@@ -105,12 +108,26 @@ static ssize_t fmp_fips_integrity_result_show(struct device *dev,
 	return snprintf(buf, sizeof(pass), "%s\n", fmp->result.integrity ? pass : fail);
 }
 
-static DEVICE_ATTR(fmp_fips_status, 0444, fmp_fips_result_show, NULL);
-static DEVICE_ATTR(aes_xts_status, 0444, fmp_fips_aes_xts_result_show, NULL);
-static DEVICE_ATTR(aes_cbc_status, 0444, fmp_fips_aes_cbc_result_show, NULL);
-static DEVICE_ATTR(sha256_status, 0444, fmp_fips_sha256_result_show, NULL);
-static DEVICE_ATTR(hmac_status, 0444, fmp_fips_hmac_result_show, NULL);
-static DEVICE_ATTR(integrity_status, 0444, fmp_fips_integrity_result_show, NULL);
+static ssize_t fmp_fips_run_store(struct device *dev, struct device_attribute *attr,
+			 const char *buf, size_t count)
+{
+	static bool run;
+
+	if (!run) {
+		struct exynos_fmp *fmp = dev_get_drvdata(dev);
+		exynos_fmp_fips_test(fmp);
+		run = 1;
+	}
+	return count;
+}
+
+static DEVICE_ATTR_RO(fmp_fips_status);
+static DEVICE_ATTR_RO(aes_xts_status);
+static DEVICE_ATTR_RO(aes_cbc_status);
+static DEVICE_ATTR_RO(sha256_status);
+static DEVICE_ATTR_RO(hmac_status);
+static DEVICE_ATTR_RO(integrity_status);
+static DEVICE_ATTR_WO(fmp_fips_run);
 
 static struct attribute *fmp_fips_attr[] = {
 	&dev_attr_fmp_fips_status.attr,
@@ -119,6 +136,7 @@ static struct attribute *fmp_fips_attr[] = {
 	&dev_attr_sha256_status.attr,
 	&dev_attr_hmac_status.attr,
 	&dev_attr_integrity_status.attr,
+	&dev_attr_fmp_fips_run.attr,
 	NULL,
 };
 
@@ -137,13 +155,13 @@ static const struct file_operations fmp_fips_fops = {
 #endif
 };
 
-int exynos_fmp_fips_init(struct exynos_fmp *fmp)
+int exynos_fmp_fips_register(struct exynos_fmp *fmp)
 {
 	int ret;
 
 	if (!fmp || !fmp->dev) {
 		pr_err("%s: Invalid exynos fmp dev\n", __func__);
-		return -EINVAL;
+		goto err;
 	}
 
 	set_fmp_fips_state(FMP_FIPS_INIT_STATE);
@@ -155,30 +173,57 @@ int exynos_fmp_fips_init(struct exynos_fmp *fmp)
 	if (ret) {
 		dev_err(fmp->dev, "%s: Fail to register misc device. ret(%d)\n",
 				__func__, ret);
-		return -EINVAL;
+		goto err;
 	}
 
 	ret = sysfs_create_group(&fmp->dev->kobj, &fmp_fips_attr_group);
 	if (ret) {
 		dev_err(fmp->dev, "%s: Fail to create sysfs. ret(%d)\n",
 				__func__, ret);
-		return -EINVAL;
+		goto err_misc;
 	}
 
-	set_fmp_fips_state(FMP_FIPS_SUCCESS_STATE);
+	dev_info(fmp->dev, "%s: FMP register misc device. ret(%d)\n",
+			__func__, ret);
+	return 0;
+
+err_misc:
+	misc_deregister(&fmp->miscdev);
+err:
+	return -EINVAL;
+}
+
+void exynos_fmp_fips_test(struct exynos_fmp *fmp)
+{
+#if defined(CONFIG_EXYNOS_FMP_FIPS_FUNC_TEST)
+	exynos_fmp_func_test_KAT_case(fmp);
+#endif
+	exynos_fmp_fips_init(fmp);
+}
+
+int exynos_fmp_fips_init(struct exynos_fmp *fmp)
+{
+	int ret = 0;
+
+	if (!fmp || !fmp->dev) {
+		pr_err("%s: Invalid exynos fmp dev\n", __func__);
+		goto err;
+	}
+
+	dev_info(fmp->dev, "%s: Started!!\n", __func__);
+	set_fmp_fips_state(FMP_FIPS_PROGRESS_STATE);
 
 	fmp->test_data = fmp_test_init(fmp);
 	if (!fmp->test_data) {
 		dev_err(fmp->dev,
 			"%s: fails to initialize fips test.\n", __func__);
-		ret = -EINVAL;
 		goto err;
 	}
 
 	ret = do_fmp_selftest(fmp);
 	if (ret) {
 		dev_err(fmp->dev, "%s: self-tests for FMP failed\n", __func__);
-		goto err;
+		goto err_data;
 	} else {
 		dev_info(fmp->dev, "%s: self-tests for FMP passed\n", __func__);
 	}
@@ -187,7 +232,7 @@ int exynos_fmp_fips_init(struct exynos_fmp *fmp)
 	if (ret) {
 		dev_err(fmp->dev, "%s: integrity check for FMP failed\n", __func__);
 		fmp->result.integrity = 0;
-		goto err;
+		goto err_data;
 	} else {
 		dev_info(fmp->dev, "%s: integrity check for FMP passed\n", __func__);
 		fmp->result.integrity = 1;
@@ -197,19 +242,30 @@ int exynos_fmp_fips_init(struct exynos_fmp *fmp)
 	fmp->result.overall = 1;
 	fmp_test_exit(fmp->test_data);
 	return 0;
-err:
+err_data:
 #if defined(CONFIG_NODE_FOR_SELFTEST_FAIL)
 	set_fmp_fips_state(FMP_FIPS_ERR_STATE);
 	fmp->result.overall = 0;
 	fmp_test_exit(fmp->test_data);
 	return 0;
 #else
-	panic("%s: Panic due to FMP self test for FIPS KAT", __func__);
+	// return 0 if KAT function test mode
+	if (fmp->test_vops) {
+		set_fmp_fips_state(FMP_FIPS_ERR_STATE);
+		fmp->result.overall = 0;
+		fmp_test_exit(fmp->test_data);
+		return 0;
+	}
+	else {
+		panic("%s: Panic due to FMP self test for FIPS KAT", __func__);
+	}
 #endif
+err:
+	set_fmp_fips_state(FMP_FIPS_ERR_STATE);
 	return -EINVAL;
 }
 
-void exynos_fmp_fips_exit(struct exynos_fmp *fmp)
+void exynos_fmp_fips_deregister(struct exynos_fmp *fmp)
 {
 	sysfs_remove_group(&fmp->dev->kobj, &fmp_fips_attr_group);
 	misc_deregister(&fmp->miscdev);

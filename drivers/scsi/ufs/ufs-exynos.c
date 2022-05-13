@@ -608,9 +608,8 @@ static int exynos_ufs_init(struct ufs_hba *hba)
 	else
 		ufs->smu = id;
 
-	/* FMPSECURITY & SMU */
-	exynos_ufs_fmp_sec_cfg(ufs);
-	exynos_ufs_smu_init(ufs);
+	/* FMPSECURITY */
+	exynos_ufs_fmp_config(hba, 1);
 
 	/* Enable log */
 	ret =  exynos_ufs_init_dbg(hba);
@@ -951,9 +950,8 @@ static int __exynos_ufs_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 		clk_prepare_enable(ufs->clk_hci);
 	exynos_ufs_ctrl_auto_hci_clk(ufs, false);
 
-	/* FMPSECURITY & SMU resume */
-	exynos_ufs_fmp_sec_cfg(ufs);
-	exynos_ufs_smu_resume(ufs);
+	/* FMPSECURITY */
+	exynos_ufs_fmp_config(hba, 0);
 
 	/* secure log */
 #ifdef CONFIG_EXYNOS_SMC_LOGGING
@@ -982,20 +980,6 @@ static u8 exynos_ufs_get_unipro_direct(struct ufs_hba *hba, u32 num)
 	return unipro_readl(ufs, offset[num]);
 }
 
-static int exynos_ufs_crypto_engine_cfg(struct ufs_hba *hba,
-				struct ufshcd_lrb *lrbp,
-				struct scatterlist *sg, int index,
-				int sector_offset, int page_index)
-{
-	return exynos_ufs_fmp_cfg(hba, lrbp, sg, index, sector_offset, page_index);
-}
-
-static int exynos_ufs_crypto_engine_clear(struct ufs_hba *hba,
-				struct ufshcd_lrb *lrbp)
-{
-	return exynos_ufs_fmp_clear(hba, lrbp);
-}
-
 static int exynos_ufs_access_control_abort(struct ufs_hba *hba)
 {
 	struct exynos_ufs *ufs = to_exynos_ufs(hba);
@@ -1017,8 +1001,6 @@ static struct ufs_hba_variant_ops exynos_ufs_ops = {
 	.suspend = __exynos_ufs_suspend,
 	.resume = __exynos_ufs_resume,
 	.get_unipro_result = exynos_ufs_get_unipro_direct,
-	.crypto_engine_cfg = exynos_ufs_crypto_engine_cfg,
-	.crypto_engine_clear = exynos_ufs_crypto_engine_clear,
 	.access_control_abort = exynos_ufs_access_control_abort,
 };
 
