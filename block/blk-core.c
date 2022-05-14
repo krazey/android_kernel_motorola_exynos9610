@@ -1804,9 +1804,6 @@ void blk_init_request_from_bio(struct request *req, struct bio *bio)
 	else
 		req->ioprio = IOPRIO_PRIO_VALUE(IOPRIO_CLASS_NONE, 0);
 	req->write_hint = bio->bi_write_hint;
-#ifdef CONFIG_CRYPTO_DISKCIPHER_DUN
-	req->__dun = bio->bi_iter.bi_dun;
-#endif
 	blk_rq_bio_prep(req->q, req, bio);
 }
 EXPORT_SYMBOL_GPL(blk_init_request_from_bio);
@@ -2816,10 +2813,6 @@ bool blk_update_request(struct request *req, blk_status_t error,
 	/* update sector only for requests with clear definition of sector */
 	if (!blk_rq_is_passthrough(req)) {
 		req->__sector += total_bytes >> 9;
-#ifdef CONFIG_CRYPTO_DISKCIPHER_DUN
-		if (req->__dun)
-			req->__dun += total_bytes >> 12;
-#endif
 	}
 
 	/* mixed attributes always follow the first bio */
@@ -3184,9 +3177,6 @@ static void __blk_rq_prep_clone(struct request *dst, struct request *src)
 	dst->cpu = src->cpu;
 	dst->__sector = blk_rq_pos(src);
 	dst->__data_len = blk_rq_bytes(src);
-#ifdef CONFIG_CRYPTO_DISKCIPHER_DUN
-	dst->__dun = blk_rq_dun(src);
-#endif
 	if (src->rq_flags & RQF_SPECIAL_PAYLOAD) {
 		dst->rq_flags |= RQF_SPECIAL_PAYLOAD;
 		dst->special_vec = src->special_vec;

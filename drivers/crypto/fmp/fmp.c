@@ -21,7 +21,6 @@
 #include <linux/scatterlist.h>
 #include <linux/smc.h>
 #include <crypto/fmp.h>
-#include <crypto/smu.h>
 
 #include "fmp_fips_main.h"
 #ifdef CONFIG_EXYNOS_FMP_FIPS

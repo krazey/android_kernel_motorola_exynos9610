@@ -41,6 +41,10 @@
 #define FALSE 0
 #endif
 
+#if defined(CONFIG_PANIC_FOR_SELFTEST_FAIL) || defined(CONFIG_NODE_FOR_SELFTEST_FAIL)
+#define CONFIG_EXYNOS_FMP_FIPS
+#endif
+
 enum fmp_crypto_algo_mode {
 	EXYNOS_FMP_BYPASS_MODE = 0,
 	EXYNOS_FMP_ALGO_MODE_AES_CBC = 1,
@@ -76,7 +80,9 @@ struct fmp_crypto_info {
 	void *ctx;
 };
 
-#if defined(CONFIG_MMC_DW_EXYNOS_FMP)
+#if defined(CONFIG_MMC_DW_EXYNOS_FMP) && defined(CONFIG_SCSI_UFS_EXYNOS_FMP)
+#error "FMP doesn't support muti-host"
+#elif defined(CONFIG_MMC_DW_EXYNOS_FMP)
 struct fmp_table_setting {
 	__le32 des0;		/* des0 */
 #define GET_CMDQ_LENGTH(d) \
@@ -98,7 +104,7 @@ struct fmp_table_setting {
 	/* CMDQ Operation */
 #define FKL_CMDQ BIT(0)
 #define DKL_CMDQ BIT(1)
-#define SET_CMDQ_KEYLEN(d, v) ((d)->des2 |= (uint32_t)v)
+#define SET_CMDQ_KEYLEN(d, v) ((d)->des3 |= (uint32_t)v)
 #define SET_CMDQ_FAS(d, v) \
 			((d)->des3 = ((d)->des3 & 0xfffffff3) | v << 2)
 #define SET_CMDQ_DAS(d, v) \
@@ -253,6 +259,35 @@ struct fmp_request {
 	bool fips;
 };
 
+#define ACCESS_CONTROL_ABORT	0x14
+
+#ifndef SMC_CMD_FMP_SECURITY
+/* For FMP/SMU Ctrl */
+#define SMC_CMD_FMP_SECURITY		(0xC2001810)
+#define SMC_CMD_FMP_DISK_KEY_STORED	(0xC2001820)
+#define SMC_CMD_FMP_DISK_KEY_SET	(0xC2001830)
+#define SMC_CMD_FMP_DISK_KEY_CLEAR	(0xC2001840)
+#define SMC_CMD_SMU			(0xC2001850)
+#define SMC_CMD_FMP_SMU_RESUME		(0xC2001860)
+#define SMC_CMD_FMP_SMU_DUMP		(0xC2001870)
+#define SMC_CMD_UFS_LOG			(0xC2001880)
+#endif
+
+enum smu_id {
+	SMU_EMBEDDED = 0,
+	SMU_UFSCARD = 1,
+	SMU_SDCARD = 2,
+	SMU_ID_MAX,
+};
+
+enum smu_command {
+	SMU_INIT = 0,
+	SMU_SET = 1,
+	SMU_ABORT = 2,
+};
+
+/* fmp functions */
+#if defined(CONFIG_MMC_DW_EXYNOS_FMP) || defined(CONFIG_SCSI_UFS_EXYNOS_FMP)
 int exynos_fmp_fips(struct bio *bio);
 int exynos_fmp_bypass(struct fmp_request *req, struct bio *bio);
 int exynos_fmp_sec_cfg(int fmp_id, int smu_id, bool init);
@@ -263,10 +298,14 @@ int exynos_fmp_setkey(struct fmp_crypto_info *ci,
 		u8 *in_key, u32 keylen, bool persistent);
 int exynos_fmp_clearkey(struct fmp_crypto_info *ci);
 bool exynos_fmp_check_test(struct bio *bio, struct fmp_crypto_info *fmp_info);
-
-#ifndef CONFIG_CRYPTO_MANAGER_DISABLE_TESTS
-int exynos_fmp_test_crypt(struct fmp_crypto_info *ci,
-		const uint8_t *iv, uint32_t ivlen, uint8_t *src,
-		uint8_t *dst, uint32_t len, bool enc, void *priv);
+#else
+#define exynos_fmp_fips(a) ((void *)0)
+#define exynos_fmp_bypass(a, b) ((void *)0)
+#define exynos_fmp_sec_cfg(a, b, c) (0)
+#define exynos_fmp_smu_abort(a) (0)
+#define exynos_fmp_crypt(a, b) (0)
+#define exynos_fmp_clear(a, b) (0)
+#define exynos_fmp_setkey(a, b, c, d) (0)
+#define exynos_fmp_clearkey(a) (0)
 #endif
 #endif /* _EXYNOS_FMP_H_ */
